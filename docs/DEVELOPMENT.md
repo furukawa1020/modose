@@ -55,3 +55,9 @@ The module contains only a package declaration. The HTTP service is introduced b
 - `services/vision-api/`: Go Cloud Run API.
 - `api/`: OpenAPI and JSON Schema contracts.
 - `fixtures/`: versioned Baseline, Compare, and Verify contract examples.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` classifies changed paths and runs only the applicable
+Android, Rust, Go, and contract baseline jobs. The stable `CI gate` check aggregates
+successful and skipped jobs and is the check intended for `main` branch protection.
