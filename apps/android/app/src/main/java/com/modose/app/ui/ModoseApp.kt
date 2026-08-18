@@ -24,6 +24,8 @@ import com.modose.app.ar.session.ArCameraFrameSource
 import com.modose.app.ar.render.CameraBackgroundSurfaceController
 import com.modose.app.ar.render.CameraBackgroundSurfaceFailure
 import com.modose.app.ar.render.CameraBackgroundSurfaceView
+import com.modose.app.ui.camera.CameraLiveStatus
+import com.modose.app.ui.camera.CameraOverlayHost
 import com.modose.app.permission.CameraPermissionState
 import com.modose.app.ui.theme.ModoseTheme
 
@@ -184,10 +186,15 @@ private fun CameraBackgroundHost(
             view.releaseSurface()
         }
     }
-    AndroidView(
-        factory = { view },
-        modifier = Modifier.fillMaxSize(),
-        update = { it.frameSource = frameSource },
+    CameraOverlayHost(
+        cameraSurface = {
+            AndroidView(
+                factory = { view },
+                modifier = Modifier.fillMaxSize(),
+                update = { it.frameSource = frameSource },
+            )
+        },
+        overlay = { CameraLiveStatus() },
     )
 }
 
