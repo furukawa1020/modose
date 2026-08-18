@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.modose.app.di.AppContainer
+import com.modose.app.ar.ArCoreGateState
 import com.modose.app.permission.CameraPermissionState
 import com.modose.app.ui.theme.ModoseTheme
 
@@ -20,14 +21,19 @@ import com.modose.app.ui.theme.ModoseTheme
 fun ModoseApp(
     appContainer: AppContainer,
     cameraPermissionState: CameraPermissionState,
+    arCoreGateState: ArCoreGateState,
     onRequestCameraPermission: () -> Unit,
     onOpenApplicationSettings: () -> Unit,
+    onRequestArCoreInstall: () -> Unit,
 ) {
     CompositionLocalProvider(LocalAppContainer provides appContainer) {
         ModoseTheme {
             Surface(modifier = Modifier.fillMaxSize()) {
                 if (cameraPermissionState == CameraPermissionState.Granted) {
-                    GrantedCameraContent()
+                    ArCoreGate(
+                        state = arCoreGateState,
+                        onRequestInstall = onRequestArCoreInstall,
+                    )
                 } else {
                     CameraPermissionGate(
                         state = cameraPermissionState,
@@ -41,8 +47,57 @@ fun ModoseApp(
 }
 
 @Composable
-private fun GrantedCameraContent() {
-    Surface(modifier = Modifier.fillMaxSize()) {}
+private fun ArCoreGate(
+    state: ArCoreGateState,
+    onRequestInstall: () -> Unit,
+) {
+    when (state) {
+        ArCoreGateState.Ready -> Surface(modifier = Modifier.fillMaxSize()) {}
+        ArCoreGateState.Checking,
+        ArCoreGateState.Installing,
+        -> GateMessage(
+            title = if (state == ArCoreGateState.Checking) "Checking AR support" else "Installing AR services",
+            body = "MODOSE will continue when Google Play Services for AR is ready.",
+        )
+        ArCoreGateState.NotInstalled,
+        ArCoreGateState.UpdateRequired,
+        -> GateMessage(
+            title = if (state == ArCoreGateState.NotInstalled) "AR services are required" else "AR services need an update",
+            body = "Install the supported version before restoring a scene.",
+            actionLabel = if (state == ArCoreGateState.NotInstalled) "Install" else "Update",
+            onAction = onRequestInstall,
+        )
+        ArCoreGateState.Unsupported -> GateMessage(
+            title = "This device is not supported",
+            body = "MODOSE requires an ARCore-compatible Android device.",
+        )
+        is ArCoreGateState.Unavailable -> GateMessage(
+            title = "AR services are unavailable",
+            body = "AR support could not be confirmed. Try again from the install action.",
+            actionLabel = "Try again",
+            onAction = onRequestInstall,
+        )
+    }
+}
+
+@Composable
+private fun GateMessage(
+    title: String,
+    body: String,
+    actionLabel: String? = null,
+    onAction: () -> Unit = {},
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(text = title)
+        Text(text = body, modifier = Modifier.padding(vertical = 20.dp))
+        if (actionLabel != null) {
+            Button(onClick = onAction) { Text(text = actionLabel) }
+        }
+    }
 }
 
 @Composable
