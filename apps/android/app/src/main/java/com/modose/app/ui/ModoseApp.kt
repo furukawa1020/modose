@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.modose.app.di.AppContainer
 import com.modose.app.ar.ArCoreGateState
+import com.modose.app.ar.session.ArSessionPhase
+import com.modose.app.ar.session.ArSessionResult
 import com.modose.app.permission.CameraPermissionState
 import com.modose.app.ui.theme.ModoseTheme
 
@@ -22,9 +24,11 @@ fun ModoseApp(
     appContainer: AppContainer,
     cameraPermissionState: CameraPermissionState,
     arCoreGateState: ArCoreGateState,
+    arSessionResult: ArSessionResult?,
     onRequestCameraPermission: () -> Unit,
     onOpenApplicationSettings: () -> Unit,
     onRequestArCoreInstall: () -> Unit,
+    onRetryArSession: () -> Unit,
 ) {
     CompositionLocalProvider(LocalAppContainer provides appContainer) {
         ModoseTheme {
@@ -32,7 +36,9 @@ fun ModoseApp(
                 if (cameraPermissionState == CameraPermissionState.Granted) {
                     ArCoreGate(
                         state = arCoreGateState,
+                        sessionResult = arSessionResult,
                         onRequestInstall = onRequestArCoreInstall,
+                        onRetrySession = onRetryArSession,
                     )
                 } else {
                     CameraPermissionGate(
@@ -49,10 +55,12 @@ fun ModoseApp(
 @Composable
 private fun ArCoreGate(
     state: ArCoreGateState,
+    sessionResult: ArSessionResult?,
     onRequestInstall: () -> Unit,
+    onRetrySession: () -> Unit,
 ) {
     when (state) {
-        ArCoreGateState.Ready -> Surface(modifier = Modifier.fillMaxSize()) {}
+        ArCoreGateState.Ready -> ArSessionGate(sessionResult, onRetrySession)
         ArCoreGateState.Checking,
         ArCoreGateState.Installing,
         -> GateMessage(
@@ -76,6 +84,28 @@ private fun ArCoreGate(
             body = "AR support could not be confirmed. Try again from the install action.",
             actionLabel = "Try again",
             onAction = onRequestInstall,
+        )
+    }
+}
+
+@Composable
+private fun ArSessionGate(
+    result: ArSessionResult?,
+    onRetry: () -> Unit,
+) {
+    when {
+        result is ArSessionResult.Applied && result.phase == ArSessionPhase.Resumed -> {
+            Surface(modifier = Modifier.fillMaxSize()) {}
+        }
+        result is ArSessionResult.Rejected -> GateMessage(
+            title = "Camera session could not start",
+            body = "MODOSE kept the camera closed. Retry when the camera is available.",
+            actionLabel = "Retry",
+            onAction = onRetry,
+        )
+        else -> GateMessage(
+            title = "Starting camera session",
+            body = "MODOSE is preparing the AR camera.",
         )
     }
 }
