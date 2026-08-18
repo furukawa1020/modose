@@ -231,7 +231,7 @@ components:
       required: true
       schema:
         type: string
-        const: '1'
+        const: '1.0'
     SceneId:
       name: sceneId
       in: path
@@ -320,7 +320,7 @@ components:
       properties:
         schemaVersion:
           type: string
-          const: '1'
+          const: '1.0'
         modelId:
           type: string
           minLength: 1
@@ -344,7 +344,7 @@ components:
           maximum: 5
         schemaVersion:
           type: string
-          const: '1'
+          const: '1.0'
     StoredMetadata:
       type: object
       additionalProperties: false
