@@ -1,5 +1,7 @@
 package com.modose.app.ar.session
 
+import com.modose.app.ar.plane.HorizontalPlaneState
+
 data class ArCameraFrame(
     val timestampNanos: Long,
     val transformedTextureCoordinates: FloatArray?,
@@ -7,6 +9,7 @@ data class ArCameraFrame(
         phase = ArTrackingPhase.Paused,
         issue = ArTrackingIssue.Unknown,
     ),
+    val horizontalPlaneState: HorizontalPlaneState = HorizontalPlaneState.Searching,
 )
 
 enum class ArTrackingPhase {
