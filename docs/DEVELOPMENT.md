@@ -29,7 +29,11 @@ macOS or Linux:
 ./apps/android/gradlew -p apps/android build
 ```
 
-This build intentionally has no Android application module. The app shell is introduced by M-009.
+Build both Android application variants:
+
+```powershell
+apps\android\gradlew.bat -p apps\android :app:assembleDebug :app:assembleRelease
+```
 
 ### Rust workspace
 
