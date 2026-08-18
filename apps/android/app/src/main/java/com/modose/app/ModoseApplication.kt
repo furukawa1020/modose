@@ -5,6 +5,6 @@ import com.modose.app.di.AppContainer
 
 class ModoseApplication : Application() {
     val appContainer: AppContainer by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        AppContainer.create()
+        AppContainer.create(applicationContext)
     }
 }

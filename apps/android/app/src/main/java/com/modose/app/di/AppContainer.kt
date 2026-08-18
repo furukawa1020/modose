@@ -1,7 +1,15 @@
 package com.modose.app.di
 
-class AppContainer private constructor() {
+import android.content.Context
+import com.modose.app.permission.CameraPermissionHistory
+import com.modose.app.permission.SharedPreferencesCameraPermissionHistory
+
+class AppContainer private constructor(
+    val cameraPermissionHistory: CameraPermissionHistory,
+) {
     companion object {
-        fun create(): AppContainer = AppContainer()
+        fun create(context: Context): AppContainer = AppContainer(
+            cameraPermissionHistory = SharedPreferencesCameraPermissionHistory(context),
+        )
     }
 }
