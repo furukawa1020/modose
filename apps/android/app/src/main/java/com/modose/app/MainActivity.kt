@@ -22,6 +22,7 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 import com.modose.app.ar.ArCoreAvailabilityPolicy
 import com.modose.app.ar.ArCoreFailureReason
 import com.modose.app.ar.ArCoreGateState
+import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.plane.HorizontalPlaneState
 import com.modose.app.ar.session.ArCoreSessionLifecycle
 import com.modose.app.ar.session.ArCameraFrameSource
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
     private var cameraBackgroundFailure by mutableStateOf<CameraBackgroundSurfaceFailure?>(null)
     private var trackingDiagnostics by mutableStateOf<ArTrackingDiagnostics?>(null)
     private var horizontalPlaneState by mutableStateOf<HorizontalPlaneState?>(null)
+    private var sceneAnchorState by mutableStateOf<SceneAnchorState?>(null)
     private val cameraSurfaceRegistry = CameraSurfaceControllerRegistry()
     private val arSessionCoordinator by lazy {
         ArSessionActivityCoordinator(
@@ -73,6 +75,7 @@ class MainActivity : ComponentActivity() {
                 cameraBackgroundFailure = cameraBackgroundFailure,
                 trackingDiagnostics = trackingDiagnostics,
                 horizontalPlaneState = horizontalPlaneState,
+                sceneAnchorState = sceneAnchorState,
                 onRequestCameraPermission = ::requestCameraPermission,
                 onOpenApplicationSettings = ::openApplicationSettings,
                 onRequestArCoreInstall = ::requestArCoreInstall,
@@ -81,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 onCameraBackgroundFailure = { cameraBackgroundFailure = it },
                 onTrackingDiagnostics = { trackingDiagnostics = it },
                 onHorizontalPlaneState = { horizontalPlaneState = it },
+                onSceneAnchorState = { sceneAnchorState = it },
                 onCameraSurfaceChanged = cameraSurfaceRegistry::replace,
             )
         }

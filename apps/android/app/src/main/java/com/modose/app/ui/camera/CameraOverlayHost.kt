@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.plane.HorizontalPlaneState
 import com.modose.app.ar.session.ArTrackingDiagnostics
 import com.modose.app.ar.session.ArTrackingIssue
@@ -42,9 +43,10 @@ fun CameraOverlayHost(
 fun BoxScope.CameraLiveStatus(
     diagnostics: ArTrackingDiagnostics?,
     horizontalPlaneState: HorizontalPlaneState?,
+    sceneAnchorState: SceneAnchorState?,
 ) {
     val presentation = if (diagnostics?.phase == ArTrackingPhase.Tracking) {
-        horizontalPlaneState.toPresentation()
+        sceneAnchorState.toPresentation() ?: horizontalPlaneState.toPresentation()
     } else {
         diagnostics.toPresentation()
     }
@@ -91,6 +93,16 @@ private fun HorizontalPlaneState?.toPresentation(): TrackingPresentation = when 
     -> presentation("FINDING SURFACE", "Searching for a horizontal surface", 0xB31A1C1B)
     is HorizontalPlaneState.Tracking -> presentation("SURFACE READY", "Horizontal surface is ready", 0xB3005A55)
     is HorizontalPlaneState.Lost -> presentation("SURFACE LOST", "Horizontal surface tracking was lost", 0xB38B1E1E)
+}
+
+private fun SceneAnchorState?.toPresentation(): TrackingPresentation? = when (this) {
+    null,
+    SceneAnchorState.Unavailable,
+    -> null
+    is SceneAnchorState.Tracking -> presentation("SCENE LOCKED", "Scene anchor is tracking", 0xB3005A55)
+    is SceneAnchorState.Paused -> presentation("ANCHOR PAUSED", "Scene anchor tracking is paused", 0xB37A4E00)
+    is SceneAnchorState.Lost -> presentation("ANCHOR LOST", "Scene anchor was lost", 0xB38B1E1E)
+    is SceneAnchorState.Failed -> presentation("ANCHOR FAILED", "Scene anchor could not be created", 0xB38B1E1E)
 }
 
 private fun presentation(
