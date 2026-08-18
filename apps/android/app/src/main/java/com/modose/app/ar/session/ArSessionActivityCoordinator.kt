@@ -2,8 +2,8 @@ package com.modose.app.ar.session
 
 class ArSessionActivityCoordinator(
     private val lifecycleFactory: () -> ArSessionLifecycle,
-    private val onResult: (ArSessionResult) -> Unit,
     private val onFrameSourceChanged: (ArCameraFrameSource?) -> Unit = {},
+    private val onResult: (ArSessionResult) -> Unit,
 ) {
     private var lifecycle: ArSessionLifecycle? = null
     private var activityResumed = false
