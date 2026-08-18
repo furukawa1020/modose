@@ -37,6 +37,17 @@ class SceneAnchorContractTest {
     }
 
     @Test
+    fun `allows retry after a typed creation failure`() {
+        assertEquals(
+            SceneAnchorCreationDecision.CreateAtCenter(9),
+            SceneAnchorCreationPolicy.decide(
+                HorizontalPlaneState.Tracking(plane(9)),
+                SceneAnchorState.Failed(SceneAnchorFailureReason.NotTracking),
+            ),
+        )
+    }
+
+    @Test
     fun `reports paused and stopped without treating them as tracking`() {
         val tracker = SceneAnchorStateTracker()
         val anchor = anchor(12)

@@ -22,6 +22,13 @@ sealed interface SceneAnchorState {
     data class Tracking(val anchor: SceneAnchorSnapshot) : SceneAnchorState
     data class Paused(val anchor: SceneAnchorSnapshot) : SceneAnchorState
     data class Lost(val previousAnchorId: Long) : SceneAnchorState
+    data class Failed(val reason: SceneAnchorFailureReason) : SceneAnchorState
+}
+
+enum class SceneAnchorFailureReason {
+    NotTracking,
+    ResourceExhausted,
+    CreationFailed,
 }
 
 sealed interface SceneAnchorCreationDecision {
@@ -45,6 +52,7 @@ object SceneAnchorCreationPolicy {
             is SceneAnchorState.Paused -> anchorState.anchor.id
             SceneAnchorState.Unavailable,
             is SceneAnchorState.Lost,
+            is SceneAnchorState.Failed,
             -> null
         }
         if (existingId != null) {
