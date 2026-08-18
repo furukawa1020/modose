@@ -61,6 +61,10 @@ private class AndroidArSessionRuntime(
         return ArCameraFrame(
             timestampNanos = frame.timestamp,
             transformedTextureCoordinates = transformedCoordinates,
+            trackingDiagnostics = ArTrackingDiagnosticsPolicy.resolve(
+                trackingState = frame.camera.trackingState,
+                failureReason = frame.camera.trackingFailureReason,
+            ),
         )
     }
 
