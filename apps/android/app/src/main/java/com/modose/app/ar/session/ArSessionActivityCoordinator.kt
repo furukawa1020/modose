@@ -3,6 +3,7 @@ package com.modose.app.ar.session
 class ArSessionActivityCoordinator(
     private val lifecycleFactory: () -> ArSessionLifecycle,
     private val onResult: (ArSessionResult) -> Unit,
+    private val onFrameSourceChanged: (ArCameraFrameSource?) -> Unit = {},
 ) {
     private var lifecycle: ArSessionLifecycle? = null
     private var activityResumed = false
@@ -43,7 +44,10 @@ class ArSessionActivityCoordinator(
     private fun startIfAllowed() {
         if (destroyed || !activityResumed || !arCoreReady) return
 
-        val ownedLifecycle = lifecycle ?: lifecycleFactory().also { lifecycle = it }
+        val ownedLifecycle = lifecycle ?: lifecycleFactory().also {
+            lifecycle = it
+            onFrameSourceChanged(it as? ArCameraFrameSource)
+        }
         val createResult = ownedLifecycle.create()
         onResult(createResult)
         if (createResult is ArSessionResult.Applied) {
@@ -54,6 +58,7 @@ class ArSessionActivityCoordinator(
     private fun release() {
         val ownedLifecycle = lifecycle
         lifecycle = null
+        onFrameSourceChanged(null)
         ownedLifecycle?.close()?.let(onResult)
     }
 }

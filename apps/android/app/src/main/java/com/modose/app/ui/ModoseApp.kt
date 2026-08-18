@@ -11,11 +11,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import com.modose.app.di.AppContainer
 import com.modose.app.ar.ArCoreGateState
 import com.modose.app.ar.session.ArSessionPhase
 import com.modose.app.ar.session.ArSessionResult
+import com.modose.app.ar.session.ArCameraFrameSource
+import com.modose.app.ar.render.CameraBackgroundSurfaceController
+import com.modose.app.ar.render.CameraBackgroundSurfaceFailure
+import com.modose.app.ar.render.CameraBackgroundSurfaceView
 import com.modose.app.permission.CameraPermissionState
 import com.modose.app.ui.theme.ModoseTheme
 
@@ -25,10 +33,15 @@ fun ModoseApp(
     cameraPermissionState: CameraPermissionState,
     arCoreGateState: ArCoreGateState,
     arSessionResult: ArSessionResult?,
+    cameraFrameSource: ArCameraFrameSource?,
+    cameraBackgroundFailure: CameraBackgroundSurfaceFailure?,
     onRequestCameraPermission: () -> Unit,
     onOpenApplicationSettings: () -> Unit,
     onRequestArCoreInstall: () -> Unit,
     onRetryArSession: () -> Unit,
+    onRetryCameraBackground: () -> Unit,
+    onCameraBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    onCameraSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     CompositionLocalProvider(LocalAppContainer provides appContainer) {
         ModoseTheme {
@@ -37,8 +50,13 @@ fun ModoseApp(
                     ArCoreGate(
                         state = arCoreGateState,
                         sessionResult = arSessionResult,
+                        frameSource = cameraFrameSource,
+                        backgroundFailure = cameraBackgroundFailure,
                         onRequestInstall = onRequestArCoreInstall,
                         onRetrySession = onRetryArSession,
+                        onRetryBackground = onRetryCameraBackground,
+                        onBackgroundFailure = onCameraBackgroundFailure,
+                        onSurfaceChanged = onCameraSurfaceChanged,
                     )
                 } else {
                     CameraPermissionGate(
@@ -56,11 +74,24 @@ fun ModoseApp(
 private fun ArCoreGate(
     state: ArCoreGateState,
     sessionResult: ArSessionResult?,
+    frameSource: ArCameraFrameSource?,
+    backgroundFailure: CameraBackgroundSurfaceFailure?,
     onRequestInstall: () -> Unit,
     onRetrySession: () -> Unit,
+    onRetryBackground: () -> Unit,
+    onBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     when (state) {
-        ArCoreGateState.Ready -> ArSessionGate(sessionResult, onRetrySession)
+        ArCoreGateState.Ready -> ArSessionGate(
+            result = sessionResult,
+            frameSource = frameSource,
+            backgroundFailure = backgroundFailure,
+            onRetry = onRetrySession,
+            onRetryBackground = onRetryBackground,
+            onBackgroundFailure = onBackgroundFailure,
+            onSurfaceChanged = onSurfaceChanged,
+        )
         ArCoreGateState.Checking,
         ArCoreGateState.Installing,
         -> GateMessage(
@@ -91,11 +122,33 @@ private fun ArCoreGate(
 @Composable
 private fun ArSessionGate(
     result: ArSessionResult?,
+    frameSource: ArCameraFrameSource?,
+    backgroundFailure: CameraBackgroundSurfaceFailure?,
     onRetry: () -> Unit,
+    onRetryBackground: () -> Unit,
+    onBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     when {
+        backgroundFailure != null -> GateMessage(
+            title = "Camera background stopped",
+            body = "MODOSE stopped drawing instead of showing an invalid camera frame.",
+            actionLabel = "Retry",
+            onAction = onRetryBackground,
+        )
         result is ArSessionResult.Applied && result.phase == ArSessionPhase.Resumed -> {
-            Surface(modifier = Modifier.fillMaxSize()) {}
+            if (frameSource == null) {
+                GateMessage(
+                    title = "Preparing camera background",
+                    body = "MODOSE is connecting the camera frame source.",
+                )
+            } else {
+                CameraBackgroundHost(
+                    frameSource = frameSource,
+                    onFailure = onBackgroundFailure,
+                    onSurfaceChanged = onSurfaceChanged,
+                )
+            }
         }
         result is ArSessionResult.Rejected -> GateMessage(
             title = "Camera session could not start",
@@ -108,6 +161,33 @@ private fun ArSessionGate(
             body = "MODOSE is preparing the AR camera.",
         )
     }
+}
+
+@Composable
+private fun CameraBackgroundHost(
+    frameSource: ArCameraFrameSource,
+    onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
+) {
+    val view = remember {
+        CameraBackgroundSurfaceView(
+            context = LocalContext.current,
+            onFailure = onFailure,
+        )
+    }
+    DisposableEffect(view) {
+        onSurfaceChanged(view)
+        view.onActivityResume()
+        onDispose {
+            onSurfaceChanged(null)
+            view.releaseSurface()
+        }
+    }
+    AndroidView(
+        factory = { view },
+        modifier = Modifier.fillMaxSize(),
+        update = { it.frameSource = frameSource },
+    )
 }
 
 @Composable

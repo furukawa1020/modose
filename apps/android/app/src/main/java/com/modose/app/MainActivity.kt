@@ -23,8 +23,11 @@ import com.modose.app.ar.ArCoreAvailabilityPolicy
 import com.modose.app.ar.ArCoreFailureReason
 import com.modose.app.ar.ArCoreGateState
 import com.modose.app.ar.session.ArCoreSessionLifecycle
+import com.modose.app.ar.session.ArCameraFrameSource
 import com.modose.app.ar.session.ArSessionActivityCoordinator
 import com.modose.app.ar.session.ArSessionResult
+import com.modose.app.ar.render.CameraBackgroundSurfaceController
+import com.modose.app.ar.render.CameraBackgroundSurfaceFailure
 import com.modose.app.permission.CameraPermissionPolicy
 import com.modose.app.permission.CameraPermissionState
 import com.modose.app.ui.ModoseApp
@@ -34,10 +37,14 @@ class MainActivity : ComponentActivity() {
     private var cameraPermissionState by mutableStateOf(CameraPermissionState.InitialRequest)
     private var arCoreGateState by mutableStateOf<ArCoreGateState>(ArCoreGateState.Checking)
     private var arSessionResult by mutableStateOf<ArSessionResult?>(null)
+    private var cameraFrameSource by mutableStateOf<ArCameraFrameSource?>(null)
+    private var cameraBackgroundFailure by mutableStateOf<CameraBackgroundSurfaceFailure?>(null)
+    private var cameraSurfaceController: CameraBackgroundSurfaceController? = null
     private val arSessionCoordinator by lazy {
         ArSessionActivityCoordinator(
             lifecycleFactory = { ArCoreSessionLifecycle(applicationContext) },
             onResult = { arSessionResult = it },
+            onFrameSourceChanged = { cameraFrameSource = it },
         )
     }
 
@@ -57,10 +64,15 @@ class MainActivity : ComponentActivity() {
                 cameraPermissionState = cameraPermissionState,
                 arCoreGateState = arCoreGateState,
                 arSessionResult = arSessionResult,
+                cameraFrameSource = cameraFrameSource,
+                cameraBackgroundFailure = cameraBackgroundFailure,
                 onRequestCameraPermission = ::requestCameraPermission,
                 onOpenApplicationSettings = ::openApplicationSettings,
                 onRequestArCoreInstall = ::requestArCoreInstall,
                 onRetryArSession = arSessionCoordinator::retry,
+                onRetryCameraBackground = ::retryCameraBackground,
+                onCameraBackgroundFailure = { cameraBackgroundFailure = it },
+                onCameraSurfaceChanged = { cameraSurfaceController = it },
             )
         }
     }
@@ -68,15 +80,19 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         arSessionCoordinator.onResume()
+        cameraSurfaceController?.onActivityResume()
         refreshCameraPermission()
     }
 
     override fun onPause() {
+        cameraSurfaceController?.onActivityPause()
         arSessionCoordinator.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
+        cameraSurfaceController?.releaseSurface()
+        cameraSurfaceController = null
         arSessionCoordinator.onDestroy()
         super.onDestroy()
     }
@@ -143,5 +159,11 @@ class MainActivity : ComponentActivity() {
         } catch (_: UnavailableException) {
             arCoreGateState = ArCoreGateState.Unavailable(ArCoreFailureReason.InstallationFailed)
         }
+    }
+
+    private fun retryCameraBackground() {
+        cameraBackgroundFailure = null
+        arSessionCoordinator.onPrerequisiteUnavailable()
+        refreshArCoreAvailability()
     }
 }
