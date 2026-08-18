@@ -26,6 +26,7 @@ import com.modose.app.ar.session.ArCoreSessionLifecycle
 import com.modose.app.ar.session.ArCameraFrameSource
 import com.modose.app.ar.session.ArSessionActivityCoordinator
 import com.modose.app.ar.session.ArSessionResult
+import com.modose.app.ar.session.ArTrackingDiagnostics
 import com.modose.app.ar.render.CameraBackgroundSurfaceController
 import com.modose.app.ar.render.CameraBackgroundSurfaceFailure
 import com.modose.app.ar.render.CameraSurfaceControllerRegistry
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private var arSessionResult by mutableStateOf<ArSessionResult?>(null)
     private var cameraFrameSource by mutableStateOf<ArCameraFrameSource?>(null)
     private var cameraBackgroundFailure by mutableStateOf<CameraBackgroundSurfaceFailure?>(null)
+    private var trackingDiagnostics by mutableStateOf<ArTrackingDiagnostics?>(null)
     private val cameraSurfaceRegistry = CameraSurfaceControllerRegistry()
     private val arSessionCoordinator by lazy {
         ArSessionActivityCoordinator(
@@ -67,12 +69,14 @@ class MainActivity : ComponentActivity() {
                 arSessionResult = arSessionResult,
                 cameraFrameSource = cameraFrameSource,
                 cameraBackgroundFailure = cameraBackgroundFailure,
+                trackingDiagnostics = trackingDiagnostics,
                 onRequestCameraPermission = ::requestCameraPermission,
                 onOpenApplicationSettings = ::openApplicationSettings,
                 onRequestArCoreInstall = ::requestArCoreInstall,
                 onRetryArSession = arSessionCoordinator::retry,
                 onRetryCameraBackground = ::retryCameraBackground,
                 onCameraBackgroundFailure = { cameraBackgroundFailure = it },
+                onTrackingDiagnostics = { trackingDiagnostics = it },
                 onCameraSurfaceChanged = cameraSurfaceRegistry::replace,
             )
         }

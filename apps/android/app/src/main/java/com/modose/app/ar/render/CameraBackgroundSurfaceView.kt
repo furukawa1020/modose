@@ -7,6 +7,7 @@ import android.view.Surface
 import com.modose.app.ar.session.ArCameraFrameFailureReason
 import com.modose.app.ar.session.ArCameraFrameResult
 import com.modose.app.ar.session.ArCameraFrameSource
+import com.modose.app.ar.session.ArTrackingDiagnostics
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -28,10 +29,12 @@ interface CameraBackgroundSurfaceController {
 class CameraBackgroundSurfaceView(
     context: Context,
     private val onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    private val onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
 ) : GLSurfaceView(context), CameraBackgroundSurfaceController {
     private val cameraRenderer = CameraSurfaceRenderer(
         displayRotation = { display?.rotation ?: Surface.ROTATION_0 },
         onFailure = { failure -> post { onFailure(failure) } },
+        onTrackingDiagnostics = { diagnostics -> post { onTrackingDiagnostics(diagnostics) } },
     )
     private var activityResumed = false
     private var released = false
@@ -72,6 +75,7 @@ class CameraBackgroundSurfaceView(
 private class CameraSurfaceRenderer(
     private val displayRotation: () -> Int,
     private val onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    private val onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
 ) : GLSurfaceView.Renderer {
     private val backgroundRenderer = CameraBackgroundRenderer()
 
@@ -86,6 +90,7 @@ private class CameraSurfaceRenderer(
     private var widthPx = 0
     private var heightPx = 0
     private var lastFailure: CameraBackgroundSurfaceFailure? = null
+    private val diagnosticsDeduplicator = TrackingDiagnosticsDeduplicator()
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0f, 0f, 0f, 1f)
@@ -135,6 +140,9 @@ private class CameraSurfaceRenderer(
             heightPx = heightPx,
         )) {
             is ArCameraFrameResult.Updated -> {
+                if (diagnosticsDeduplicator.shouldEmit(frameResult.frame.trackingDiagnostics)) {
+                    onTrackingDiagnostics(frameResult.frame.trackingDiagnostics)
+                }
                 frameResult.frame.transformedTextureCoordinates?.let { coordinates ->
                     val coordinateResult = backgroundRenderer.updateTextureCoordinates(coordinates)
                     if (coordinateResult is CameraBackgroundRenderResult.Rejected) {
@@ -162,6 +170,8 @@ private class CameraSurfaceRenderer(
         boundSource = null
         frameSource = null
         backgroundRenderer.release()
+        diagnosticsDeduplicator.reset()
+        onTrackingDiagnostics(null)
     }
 
     private fun failRenderer(result: CameraBackgroundRenderResult) {
