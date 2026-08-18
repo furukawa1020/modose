@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import com.modose.app.di.AppContainer
 import com.modose.app.ar.ArCoreGateState
+import com.modose.app.ar.plane.HorizontalPlaneState
 import com.modose.app.ar.session.ArSessionPhase
 import com.modose.app.ar.session.ArSessionResult
 import com.modose.app.ar.session.ArCameraFrameSource
@@ -39,6 +40,7 @@ fun ModoseApp(
     cameraFrameSource: ArCameraFrameSource?,
     cameraBackgroundFailure: CameraBackgroundSurfaceFailure?,
     trackingDiagnostics: ArTrackingDiagnostics?,
+    horizontalPlaneState: HorizontalPlaneState?,
     onRequestCameraPermission: () -> Unit,
     onOpenApplicationSettings: () -> Unit,
     onRequestArCoreInstall: () -> Unit,
@@ -46,6 +48,7 @@ fun ModoseApp(
     onRetryCameraBackground: () -> Unit,
     onCameraBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
     onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
+    onHorizontalPlaneState: (HorizontalPlaneState?) -> Unit,
     onCameraSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     CompositionLocalProvider(LocalAppContainer provides appContainer) {
@@ -58,11 +61,13 @@ fun ModoseApp(
                         frameSource = cameraFrameSource,
                         backgroundFailure = cameraBackgroundFailure,
                         trackingDiagnostics = trackingDiagnostics,
+                        horizontalPlaneState = horizontalPlaneState,
                         onRequestInstall = onRequestArCoreInstall,
                         onRetrySession = onRetryArSession,
                         onRetryBackground = onRetryCameraBackground,
                         onBackgroundFailure = onCameraBackgroundFailure,
                         onTrackingDiagnostics = onTrackingDiagnostics,
+                        onHorizontalPlaneState = onHorizontalPlaneState,
                         onSurfaceChanged = onCameraSurfaceChanged,
                     )
                 } else {
@@ -84,11 +89,13 @@ private fun ArCoreGate(
     frameSource: ArCameraFrameSource?,
     backgroundFailure: CameraBackgroundSurfaceFailure?,
     trackingDiagnostics: ArTrackingDiagnostics?,
+    horizontalPlaneState: HorizontalPlaneState?,
     onRequestInstall: () -> Unit,
     onRetrySession: () -> Unit,
     onRetryBackground: () -> Unit,
     onBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
     onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
+    onHorizontalPlaneState: (HorizontalPlaneState?) -> Unit,
     onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     when (state) {
@@ -97,10 +104,12 @@ private fun ArCoreGate(
             frameSource = frameSource,
             backgroundFailure = backgroundFailure,
             trackingDiagnostics = trackingDiagnostics,
+            horizontalPlaneState = horizontalPlaneState,
             onRetry = onRetrySession,
             onRetryBackground = onRetryBackground,
             onBackgroundFailure = onBackgroundFailure,
             onTrackingDiagnostics = onTrackingDiagnostics,
+            onHorizontalPlaneState = onHorizontalPlaneState,
             onSurfaceChanged = onSurfaceChanged,
         )
         ArCoreGateState.Checking,
@@ -136,10 +145,12 @@ private fun ArSessionGate(
     frameSource: ArCameraFrameSource?,
     backgroundFailure: CameraBackgroundSurfaceFailure?,
     trackingDiagnostics: ArTrackingDiagnostics?,
+    horizontalPlaneState: HorizontalPlaneState?,
     onRetry: () -> Unit,
     onRetryBackground: () -> Unit,
     onBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
     onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
+    onHorizontalPlaneState: (HorizontalPlaneState?) -> Unit,
     onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     when {
@@ -159,8 +170,10 @@ private fun ArSessionGate(
                 CameraBackgroundHost(
                     frameSource = frameSource,
                     trackingDiagnostics = trackingDiagnostics,
+                    horizontalPlaneState = horizontalPlaneState,
                     onFailure = onBackgroundFailure,
                     onTrackingDiagnostics = onTrackingDiagnostics,
+                    onHorizontalPlaneState = onHorizontalPlaneState,
                     onSurfaceChanged = onSurfaceChanged,
                 )
             }
@@ -182,8 +195,10 @@ private fun ArSessionGate(
 private fun CameraBackgroundHost(
     frameSource: ArCameraFrameSource,
     trackingDiagnostics: ArTrackingDiagnostics?,
+    horizontalPlaneState: HorizontalPlaneState?,
     onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
     onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
+    onHorizontalPlaneState: (HorizontalPlaneState?) -> Unit,
     onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     val context = LocalContext.current
@@ -192,6 +207,7 @@ private fun CameraBackgroundHost(
             context = context,
             onFailure = onFailure,
             onTrackingDiagnostics = onTrackingDiagnostics,
+            onHorizontalPlaneState = onHorizontalPlaneState,
         )
     }
     DisposableEffect(view) {
@@ -210,7 +226,7 @@ private fun CameraBackgroundHost(
                 update = { it.frameSource = frameSource },
             )
         },
-        overlay = { CameraLiveStatus(trackingDiagnostics) },
+        overlay = { CameraLiveStatus(trackingDiagnostics, horizontalPlaneState) },
     )
 }
 
