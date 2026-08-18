@@ -12,6 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -37,6 +41,10 @@ fun BoxScope.CameraLiveStatus() {
         modifier = Modifier
             .align(Alignment.TopStart)
             .padding(16.dp)
+            .semantics {
+                liveRegion = LiveRegionMode.Polite
+                stateDescription = "AR camera is live"
+            }
             .background(
                 color = Color(0xB31A1C1B),
                 shape = MaterialTheme.shapes.small,

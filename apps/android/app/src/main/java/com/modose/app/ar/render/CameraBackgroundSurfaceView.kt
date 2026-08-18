@@ -34,6 +34,7 @@ class CameraBackgroundSurfaceView(
         onFailure = { failure -> post { onFailure(failure) } },
     )
     private var activityResumed = false
+    private var released = false
 
     var frameSource: ArCameraFrameSource?
         get() = cameraRenderer.frameSource
@@ -49,7 +50,7 @@ class CameraBackgroundSurfaceView(
     }
 
     override fun onActivityResume() {
-        if (activityResumed) return
+        if (released || activityResumed) return
         activityResumed = true
         onResume()
     }
@@ -61,6 +62,8 @@ class CameraBackgroundSurfaceView(
     }
 
     override fun releaseSurface() {
+        if (released) return
+        released = true
         queueEvent(cameraRenderer::release)
         onActivityPause()
     }
