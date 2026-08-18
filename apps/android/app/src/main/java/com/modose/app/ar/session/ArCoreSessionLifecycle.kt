@@ -81,9 +81,11 @@ class ArCoreSessionLifecycle internal constructor(
         runtimeFactory = { AndroidArSessionRuntime(Session(context.applicationContext)) },
     )
 
+    @Volatile
     override var phase: ArSessionPhase = ArSessionPhase.Empty
         private set
 
+    @Volatile
     private var runtime: ArSessionRuntime? = null
     private var boundTextureId: Int? = null
     private var glThreadId: Long? = null
