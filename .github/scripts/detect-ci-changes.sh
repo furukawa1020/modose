@@ -24,7 +24,7 @@ while IFS= read -r -d '' file; do
     go.work|services/vision-api/*)
       go=true
       ;;
-    api/*|fixtures/*)
+    .github/scripts/lint-openapi.sh|api/*|fixtures/*)
       contract=true
       ;;
   esac

@@ -124,6 +124,15 @@ jobs:
           test -d fixtures/compare
           test -d fixtures/verify
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: services/vision-api/go.mod
+          cache: false
+
+      - name: Lint OpenAPI
+        run: bash .github/scripts/lint-openapi.sh
+
   ci-gate:
     name: CI gate
     if: always()
