@@ -1,6 +1,5 @@
 openapi: 3.1.0
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
-
 info:
   title: MODOSE Vision API
   version: 1.0.0
@@ -8,19 +7,15 @@ info:
     Authenticated API for Baseline, Compare, Verify, and privacy-safe scene
     metadata. Scene images are processed ephemerally and are not persisted by
     default. A complete request is limited to 4.5 MB.
-
 servers:
   - url: /
-
 tags:
   - name: Health
   - name: Vision
   - name: Scenes
-
 security:
   - firebaseAuth: []
     firebaseAppCheck: []
-
 paths:
   /healthz:
     get:
@@ -37,7 +32,6 @@ paths:
                 $ref: '#/components/schemas/Health'
         '500':
           $ref: '#/components/responses/Error'
-
   /readyz:
     get:
       tags: [Health]
@@ -53,7 +47,6 @@ paths:
                 $ref: '#/components/schemas/Health'
         '503':
           $ref: '#/components/responses/Error'
-
   /v1/vision/baseline:
     post:
       tags: [Vision]
@@ -88,7 +81,6 @@ paths:
         '502': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
         '504': { $ref: '#/components/responses/Error' }
-
   /v1/vision/compare:
     post:
       tags: [Vision]
@@ -123,7 +115,6 @@ paths:
         '502': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
         '504': { $ref: '#/components/responses/Error' }
-
   /v1/vision/verify:
     post:
       tags: [Vision]
@@ -158,7 +149,6 @@ paths:
         '502': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
         '504': { $ref: '#/components/responses/Error' }
-
   /v1/scenes/metadata:
     post:
       tags: [Scenes]
@@ -188,7 +178,6 @@ paths:
         '429': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
-
   /v1/scenes/{sceneId}:
     delete:
       tags: [Scenes]
@@ -209,7 +198,6 @@ paths:
         '429': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
-
 components:
   securitySchemes:
     firebaseAuth:
@@ -220,7 +208,6 @@ components:
       type: apiKey
       in: header
       name: X-Firebase-AppCheck
-
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -252,7 +239,6 @@ components:
       schema:
         type: string
         format: uuid
-
   responses:
     Error:
       description: Typed request or dependency failure
@@ -260,7 +246,6 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-
   schemas:
     Health:
       type: object
@@ -270,12 +255,10 @@ components:
         status:
           type: string
           enum: [ok, unavailable]
-
     Image:
       type: string
       format: binary
       description: JPEG or WebP image, at most 2 MB after normalization.
-
     CaptureMetadata:
       type: object
       additionalProperties: false
@@ -287,7 +270,6 @@ components:
         capturedAt:
           type: string
           format: date-time
-
     BaselineRequest:
       type: object
       additionalProperties: false
@@ -297,7 +279,6 @@ components:
           $ref: '#/components/schemas/CaptureMetadata'
         image:
           $ref: '#/components/schemas/Image'
-
     CompareRequest:
       type: object
       additionalProperties: false
@@ -312,7 +293,6 @@ components:
         confirmedObjects:
           type: string
           description: JSON metadata part; strict schema is added by M-007.
-
     VerifyRequest:
       type: object
       additionalProperties: false
@@ -327,14 +307,12 @@ components:
         confirmedObjects:
           type: string
           description: JSON metadata part; strict schema is added by M-007.
-
     BaselineAnalysis:
       $ref: '#/components/schemas/VisionEnvelope'
     SceneComparison:
       $ref: '#/components/schemas/VisionEnvelope'
     SceneVerification:
       $ref: '#/components/schemas/VisionEnvelope'
-
     VisionEnvelope:
       type: object
       additionalProperties: false
@@ -349,7 +327,6 @@ components:
         promptVersion:
           type: string
           minLength: 1
-
     SceneMetadata:
       type: object
       additionalProperties: false
@@ -368,7 +345,6 @@ components:
         schemaVersion:
           type: string
           const: '1'
-
     StoredMetadata:
       type: object
       additionalProperties: false
@@ -380,7 +356,6 @@ components:
         version:
           type: integer
           minimum: 1
-
     Error:
       type: object
       additionalProperties: false
