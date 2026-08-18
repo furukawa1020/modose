@@ -67,3 +67,9 @@ Lint the OpenAPI 3.1 contract with the pinned Go validator:
 ```sh
 bash .github/scripts/lint-openapi.sh
 ```
+
+Validate all accepted and rejected JSON Schema fixtures with one command:
+
+```sh
+bash .github/scripts/validate-schema-fixtures.sh
+```
