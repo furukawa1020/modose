@@ -2,4 +2,4 @@
 
 set -euo pipefail
 
-go run github.com/getkin/kin-openapi/cmd/validate@v0.145.0 -- api/openapi.yaml
+go run github.com/getkin/kin-openapi/cmd/validate@v0.145.0 --ext -- api/openapi.yaml

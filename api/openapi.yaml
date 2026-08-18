@@ -308,11 +308,11 @@ components:
           type: string
           description: JSON metadata part; strict schema is added by M-007.
     BaselineAnalysis:
-      $ref: '#/components/schemas/VisionEnvelope'
+      $ref: './schemas/baseline-analysis.schema.json'
     SceneComparison:
-      $ref: '#/components/schemas/VisionEnvelope'
+      $ref: './schemas/scene-comparison.schema.json'
     SceneVerification:
-      $ref: '#/components/schemas/VisionEnvelope'
+      $ref: './schemas/scene-verification.schema.json'
     VisionEnvelope:
       type: object
       additionalProperties: false
