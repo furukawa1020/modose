@@ -169,9 +169,10 @@ private fun CameraBackgroundHost(
     onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
     onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
-    val view = remember {
+    val context = LocalContext.current
+    val view = remember(context) {
         CameraBackgroundSurfaceView(
-            context = LocalContext.current,
+            context = context,
             onFailure = onFailure,
         )
     }
