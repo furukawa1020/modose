@@ -15,6 +15,10 @@ import com.modose.app.ar.anchor.SceneAnchorSnapshot
 import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.anchor.SceneAnchorStateTracker
 import com.modose.app.ar.anchor.SceneAnchorTrackingState
+import com.modose.app.ar.coordinates.ImageViewTransformFrameResult
+import com.modose.app.ar.coordinates.ImageViewTransformSnapshotFactory
+import com.modose.app.ar.coordinates.ImageViewTransformUnavailableReason
+import com.modose.app.ar.coordinates.ViewPixelPoint
 import com.modose.app.ar.image.AndroidCpuImageSource
 import com.modose.app.ar.image.CpuCameraImageCopier
 import com.modose.app.ar.image.CpuImageAcquisitionDecision
@@ -105,6 +109,7 @@ private class AndroidArSessionRuntime(
             null
         }
         val horizontalPlaneState = updateHorizontalPlaneState(frame, widthPx, heightPx)
+        val cpuImageResult = acquireCpuImage(frame)
         return ArCameraFrame(
             timestampNanos = frame.timestamp,
             transformedTextureCoordinates = transformedCoordinates,
@@ -114,7 +119,52 @@ private class AndroidArSessionRuntime(
             ),
             horizontalPlaneState = horizontalPlaneState,
             sceneAnchorState = updateSceneAnchorState(horizontalPlaneState),
-            cpuImageResult = acquireCpuImage(frame),
+            cpuImageResult = cpuImageResult,
+            imageViewTransformResult = buildImageViewTransform(
+                frame = frame,
+                cpuImageResult = cpuImageResult,
+                viewWidthPx = widthPx,
+                viewHeightPx = heightPx,
+            ),
+        )
+    }
+
+    private fun buildImageViewTransform(
+        frame: com.google.ar.core.Frame,
+        cpuImageResult: CpuImageAcquisitionResult,
+        viewWidthPx: Int,
+        viewHeightPx: Int,
+    ): ImageViewTransformFrameResult {
+        if (frame.camera.trackingState != TrackingState.TRACKING) {
+            return ImageViewTransformFrameResult.Unavailable(
+                ImageViewTransformUnavailableReason.TrackingUnavailable,
+            )
+        }
+        val image = (cpuImageResult as? CpuImageAcquisitionResult.Acquired)?.image
+            ?: return ImageViewTransformFrameResult.Unavailable(
+                ImageViewTransformUnavailableReason.SourceImageUnavailable,
+            )
+        val sourceBasis = floatArrayOf(
+            0f, 0f,
+            image.widthPx.toFloat(), 0f,
+            0f, image.heightPx.toFloat(),
+        )
+        val viewBasis = FloatArray(sourceBasis.size)
+        frame.transformCoordinates2d(
+            Coordinates2d.IMAGE_PIXELS,
+            sourceBasis,
+            Coordinates2d.VIEW,
+            viewBasis,
+        )
+        return ImageViewTransformSnapshotFactory.fromBasis(
+            frameTimestampNanos = frame.timestamp,
+            imageWidthPx = image.widthPx,
+            imageHeightPx = image.heightPx,
+            viewWidthPx = viewWidthPx,
+            viewHeightPx = viewHeightPx,
+            viewOrigin = ViewPixelPoint(viewBasis[0], viewBasis[1]),
+            viewImageXAxisEnd = ViewPixelPoint(viewBasis[2], viewBasis[3]),
+            viewImageYAxisEnd = ViewPixelPoint(viewBasis[4], viewBasis[5]),
         )
     }
 
