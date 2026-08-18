@@ -1,16 +1,28 @@
 package com.modose.app.ar.session
 
 import android.content.Context
+import com.google.ar.core.Anchor
 import com.google.ar.core.Session
 import com.google.ar.core.Coordinates2d
 import com.google.ar.core.Plane
+import com.google.ar.core.Pose
 import com.google.ar.core.TrackingState
+import com.modose.app.ar.anchor.SceneAnchorCreationDecision
+import com.modose.app.ar.anchor.SceneAnchorCreationPolicy
+import com.modose.app.ar.anchor.SceneAnchorFailureReason
+import com.modose.app.ar.anchor.SceneAnchorPose
+import com.modose.app.ar.anchor.SceneAnchorSnapshot
+import com.modose.app.ar.anchor.SceneAnchorState
+import com.modose.app.ar.anchor.SceneAnchorStateTracker
+import com.modose.app.ar.anchor.SceneAnchorTrackingState
 import com.modose.app.ar.plane.HorizontalPlaneCandidate
 import com.modose.app.ar.plane.HorizontalPlaneSelectionPolicy
 import com.modose.app.ar.plane.HorizontalPlaneState
 import com.modose.app.ar.plane.HorizontalPlaneStateTracker
 import com.modose.app.ar.plane.SelectedHorizontalPlane
 import com.google.ar.core.exceptions.CameraNotAvailableException
+import com.google.ar.core.exceptions.NotTrackingException
+import com.google.ar.core.exceptions.ResourceExhaustedException
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
@@ -37,14 +49,21 @@ private class AndroidArSessionRuntime(
     private val session: Session,
 ) : ArSessionRuntime {
     private val planeStateTracker = HorizontalPlaneStateTracker()
+    private val anchorStateTracker = SceneAnchorStateTracker()
     private var selectedPlane: Plane? = null
+    private var selectedPlaneHitPose: Pose? = null
     private var selectedPlaneDistanceMeters = 0f
+    private var sceneAnchor: Anchor? = null
     override fun resume() = session.resume()
 
     override fun pause() = session.pause()
 
     override fun close() {
+        sceneAnchor?.detach()
+        sceneAnchor = null
+        anchorStateTracker.reset()
         selectedPlane = null
+        selectedPlaneHitPose = null
         planeStateTracker.reset()
         session.close()
     }
@@ -72,6 +91,7 @@ private class AndroidArSessionRuntime(
         } else {
             null
         }
+        val horizontalPlaneState = updateHorizontalPlaneState(frame, widthPx, heightPx)
         return ArCameraFrame(
             timestampNanos = frame.timestamp,
             transformedTextureCoordinates = transformedCoordinates,
@@ -79,7 +99,8 @@ private class AndroidArSessionRuntime(
                 trackingState = frame.camera.trackingState,
                 failureReason = frame.camera.trackingFailureReason,
             ),
-            horizontalPlaneState = updateHorizontalPlaneState(frame, widthPx, heightPx),
+            horizontalPlaneState = horizontalPlaneState,
+            sceneAnchorState = updateSceneAnchorState(horizontalPlaneState),
         )
     }
 
@@ -96,6 +117,7 @@ private class AndroidArSessionRuntime(
         }
         if (currentPlane != null) {
             selectedPlane = null
+            selectedPlaneHitPose = null
             return planeStateTracker.update(null)
         }
         if (frame.camera.trackingState != TrackingState.TRACKING) {
@@ -103,11 +125,13 @@ private class AndroidArSessionRuntime(
         }
 
         val planeById = mutableMapOf<Long, Plane>()
+        val hitPoseById = mutableMapOf<Long, Pose>()
         val selected = HorizontalPlaneSelectionPolicy.select(
             frame.hitTest(widthPx / 2f, heightPx / 2f).mapNotNull { hit ->
                 val plane = hit.trackable as? Plane ?: return@mapNotNull null
                 val id = System.identityHashCode(plane).toLong()
                 planeById[id] = plane
+                hitPoseById[id] = hit.hitPose
                 HorizontalPlaneCandidate(
                     id = id,
                     distanceMeters = hit.distance,
@@ -122,9 +146,77 @@ private class AndroidArSessionRuntime(
         )
         if (selected != null) {
             selectedPlane = planeById[selected.id]
+            selectedPlaneHitPose = hitPoseById[selected.id]
             selectedPlaneDistanceMeters = selected.distanceMeters
         }
         return planeStateTracker.update(selected)
+    }
+
+    private fun updateSceneAnchorState(
+        planeState: HorizontalPlaneState,
+    ): SceneAnchorState {
+        val currentAnchor = sceneAnchor
+        if (currentAnchor != null) {
+            val snapshot = currentAnchor.toSnapshot()
+            val trackingState = currentAnchor.trackingState.toSceneAnchorTrackingState()
+            val state = anchorStateTracker.update(snapshot, trackingState)
+            if (currentAnchor.trackingState == TrackingState.STOPPED) {
+                currentAnchor.detach()
+                sceneAnchor = null
+            }
+            return state
+        }
+
+        val decision = SceneAnchorCreationPolicy.decide(
+            planeState = planeState,
+            anchorState = SceneAnchorState.Unavailable,
+        )
+        if (decision !is SceneAnchorCreationDecision.CreateAtCenter) {
+            return SceneAnchorState.Unavailable
+        }
+        val plane = selectedPlane
+        val hitPose = selectedPlaneHitPose
+        if (plane == null || hitPose == null || decision.planeId != System.identityHashCode(plane).toLong()) {
+            return SceneAnchorState.Unavailable
+        }
+
+        return try {
+            val created = plane.createAnchor(hitPose)
+            sceneAnchor = created
+            anchorStateTracker.update(
+                created.toSnapshot(),
+                created.trackingState.toSceneAnchorTrackingState(),
+            )
+        } catch (_: NotTrackingException) {
+            SceneAnchorState.Failed(SceneAnchorFailureReason.NotTracking)
+        } catch (_: ResourceExhaustedException) {
+            SceneAnchorState.Failed(SceneAnchorFailureReason.ResourceExhausted)
+        } catch (_: RuntimeException) {
+            SceneAnchorState.Failed(SceneAnchorFailureReason.CreationFailed)
+        }
+    }
+
+    private fun Anchor.toSnapshot(): SceneAnchorSnapshot {
+        val translation = pose.translation
+        val rotation = pose.rotationQuaternion
+        return SceneAnchorSnapshot(
+            id = System.identityHashCode(this).toLong(),
+            pose = SceneAnchorPose(
+                translationX = translation[0],
+                translationY = translation[1],
+                translationZ = translation[2],
+                rotationX = rotation[0],
+                rotationY = rotation[1],
+                rotationZ = rotation[2],
+                rotationW = rotation[3],
+            ),
+        )
+    }
+
+    private fun TrackingState.toSceneAnchorTrackingState(): SceneAnchorTrackingState = when (this) {
+        TrackingState.TRACKING -> SceneAnchorTrackingState.Tracking
+        TrackingState.PAUSED -> SceneAnchorTrackingState.Paused
+        TrackingState.STOPPED -> SceneAnchorTrackingState.Stopped
     }
 
     private fun Plane.isSelectable(): Boolean =

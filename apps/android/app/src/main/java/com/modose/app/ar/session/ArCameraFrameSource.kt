@@ -1,5 +1,6 @@
 package com.modose.app.ar.session
 
+import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.plane.HorizontalPlaneState
 
 data class ArCameraFrame(
@@ -10,6 +11,7 @@ data class ArCameraFrame(
         issue = ArTrackingIssue.Unknown,
     ),
     val horizontalPlaneState: HorizontalPlaneState = HorizontalPlaneState.Searching,
+    val sceneAnchorState: SceneAnchorState = SceneAnchorState.Unavailable,
 )
 
 enum class ArTrackingPhase {
