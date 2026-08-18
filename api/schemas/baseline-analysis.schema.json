@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modose.app/schemas/baseline-analysis/1.0",
+  "title": "BaselineAnalysis",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "modelId", "promptVersion", "sceneQuality", "objects"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "status": {"const": "ok"},
+    "modelId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "promptVersion": {"type": "string", "minLength": 1, "maxLength": 64},
+    "sceneQuality": {"$ref": "#/$defs/SceneQuality"},
+    "objects": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/SceneObject"}
+    }
+  },
+  "$defs": {
+    "Coordinate": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "Point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["y", "x"],
+      "properties": {
+        "y": {"$ref": "#/$defs/Coordinate"},
+        "x": {"$ref": "#/$defs/Coordinate"}
+      }
+    },
+    "BoundingBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["yMin", "xMin", "yMax", "xMax"],
+      "properties": {
+        "yMin": {"$ref": "#/$defs/Coordinate"},
+        "xMin": {"$ref": "#/$defs/Coordinate"},
+        "yMax": {"$ref": "#/$defs/Coordinate"},
+        "xMax": {"$ref": "#/$defs/Coordinate"}
+      }
+    },
+    "OrientationHint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"$ref": "#/$defs/Point"},
+        "end": {"$ref": "#/$defs/Point"}
+      }
+    },
+    "SceneQuality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handsPresent", "tooManyObjects", "supported", "reasonCodes"],
+      "properties": {
+        "handsPresent": {"type": "boolean"},
+        "tooManyObjects": {"type": "boolean"},
+        "supported": {"type": "boolean"},
+        "reasonCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 4,
+          "items": {
+            "enum": ["HANDS_PRESENT", "TOO_MANY_OBJECTS", "NO_SUPPORTED_OBJECTS", "UNSUPPORTED_OBJECT"]
+          }
+        }
+      }
+    },
+    "SceneObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sceneObjectId",
+        "label",
+        "visualSignature",
+        "boundingBox",
+        "orientationMeaningful",
+        "orientationHint",
+        "symmetry",
+        "confidence"
+      ],
+      "properties": {
+        "sceneObjectId": {"type": "string", "pattern": "^obj_[0-9]{2}$"},
+        "label": {"type": "string", "minLength": 1, "maxLength": 80},
+        "visualSignature": {"type": "string", "minLength": 1, "maxLength": 240},
+        "boundingBox": {"$ref": "#/$defs/BoundingBox"},
+        "orientationMeaningful": {"type": "boolean"},
+        "orientationHint": {
+          "oneOf": [
+            {"$ref": "#/$defs/OrientationHint"},
+            {"type": "null"}
+          ]
+        },
+        "symmetry": {"enum": ["none", "axis", "rotational"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"orientationMeaningful": {"const": false}},
+            "required": ["orientationMeaningful"]
+          },
+          "then": {"properties": {"orientationHint": {"type": "null"}}},
+          "else": {"properties": {"orientationHint": {"$ref": "#/$defs/OrientationHint"}}}
+        }
+      ]
+    }
+  }
+}
