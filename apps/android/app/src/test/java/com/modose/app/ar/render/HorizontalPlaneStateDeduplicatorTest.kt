@@ -11,7 +11,12 @@ class HorizontalPlaneStateDeduplicatorTest {
     fun `emits only changed plane states`() {
         val deduplicator = HorizontalPlaneStateDeduplicator()
         val tracking = HorizontalPlaneState.Tracking(
-            SelectedHorizontalPlane(id = 7L, distanceMeters = 0.4f),
+            SelectedHorizontalPlane(
+                id = 7L,
+                distanceMeters = 0.4f,
+                extentXMeters = 0.8f,
+                extentZMeters = 0.6f,
+            ),
         )
 
         assertTrue(deduplicator.shouldEmit(HorizontalPlaneState.Searching))
