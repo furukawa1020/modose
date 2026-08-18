@@ -3,6 +3,13 @@ package com.modose.app.ar.session
 import android.content.Context
 import com.google.ar.core.Session
 import com.google.ar.core.Coordinates2d
+import com.google.ar.core.Plane
+import com.google.ar.core.TrackingState
+import com.modose.app.ar.plane.HorizontalPlaneCandidate
+import com.modose.app.ar.plane.HorizontalPlaneSelectionPolicy
+import com.modose.app.ar.plane.HorizontalPlaneState
+import com.modose.app.ar.plane.HorizontalPlaneStateTracker
+import com.modose.app.ar.plane.SelectedHorizontalPlane
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
@@ -29,11 +36,18 @@ internal interface ArSessionRuntime {
 private class AndroidArSessionRuntime(
     private val session: Session,
 ) : ArSessionRuntime {
+    private val planeStateTracker = HorizontalPlaneStateTracker()
+    private var selectedPlane: Plane? = null
+    private var selectedPlaneDistanceMeters = 0f
     override fun resume() = session.resume()
 
     override fun pause() = session.pause()
 
-    override fun close() = session.close()
+    override fun close() {
+        selectedPlane = null
+        planeStateTracker.reset()
+        session.close()
+    }
 
     override fun bindCameraTexture(textureId: Int) {
         session.setCameraTextureName(textureId)
@@ -65,8 +79,65 @@ private class AndroidArSessionRuntime(
                 trackingState = frame.camera.trackingState,
                 failureReason = frame.camera.trackingFailureReason,
             ),
+            horizontalPlaneState = updateHorizontalPlaneState(frame, widthPx, heightPx),
         )
     }
+
+    private fun updateHorizontalPlaneState(
+        frame: com.google.ar.core.Frame,
+        widthPx: Int,
+        heightPx: Int,
+    ): HorizontalPlaneState {
+        val currentPlane = selectedPlane
+        if (currentPlane != null && currentPlane.isSelectable()) {
+            return planeStateTracker.update(
+                currentPlane.toSelectedPlane(selectedPlaneDistanceMeters),
+            )
+        }
+        if (currentPlane != null) {
+            selectedPlane = null
+            return planeStateTracker.update(null)
+        }
+        if (frame.camera.trackingState != TrackingState.TRACKING) {
+            return planeStateTracker.update(null)
+        }
+
+        val planeById = mutableMapOf<Long, Plane>()
+        val selected = HorizontalPlaneSelectionPolicy.select(
+            frame.hitTest(widthPx / 2f, heightPx / 2f).mapNotNull { hit ->
+                val plane = hit.trackable as? Plane ?: return@mapNotNull null
+                val id = System.identityHashCode(plane).toLong()
+                planeById[id] = plane
+                HorizontalPlaneCandidate(
+                    id = id,
+                    distanceMeters = hit.distance,
+                    extentXMeters = plane.extentX,
+                    extentZMeters = plane.extentZ,
+                    isUpwardFacing = plane.type == Plane.Type.HORIZONTAL_UPWARD_FACING,
+                    isTracking = plane.trackingState == TrackingState.TRACKING,
+                    isSubsumed = plane.subsumedBy != null,
+                    containsCenterHit = plane.isPoseInPolygon(hit.hitPose),
+                )
+            },
+        )
+        if (selected != null) {
+            selectedPlane = planeById[selected.id]
+            selectedPlaneDistanceMeters = selected.distanceMeters
+        }
+        return planeStateTracker.update(selected)
+    }
+
+    private fun Plane.isSelectable(): Boolean =
+        type == Plane.Type.HORIZONTAL_UPWARD_FACING &&
+            trackingState == TrackingState.TRACKING &&
+            subsumedBy == null
+
+    private fun Plane.toSelectedPlane(distanceMeters: Float) = SelectedHorizontalPlane(
+        id = System.identityHashCode(this).toLong(),
+        distanceMeters = distanceMeters,
+        extentXMeters = extentX,
+        extentZMeters = extentZ,
+    )
 
     private companion object {
         val OPEN_GL_QUAD = floatArrayOf(
