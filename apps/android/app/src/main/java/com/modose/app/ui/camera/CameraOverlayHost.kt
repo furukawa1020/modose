@@ -17,6 +17,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.modose.app.ar.session.ArTrackingDiagnostics
+import com.modose.app.ar.session.ArTrackingIssue
+import com.modose.app.ar.session.ArTrackingPhase
 
 @Composable
 fun CameraOverlayHost(
@@ -35,18 +38,19 @@ fun CameraOverlayHost(
 }
 
 @Composable
-fun BoxScope.CameraLiveStatus() {
+fun BoxScope.CameraLiveStatus(diagnostics: ArTrackingDiagnostics?) {
+    val presentation = diagnostics.toPresentation()
     Text(
-        text = "AR CAMERA / LIVE",
+        text = presentation.label,
         modifier = Modifier
             .align(Alignment.TopStart)
             .padding(16.dp)
             .semantics {
                 liveRegion = LiveRegionMode.Polite
-                stateDescription = "AR camera is live"
+                stateDescription = presentation.stateDescription
             }
             .background(
-                color = Color(0xB31A1C1B),
+                color = presentation.background,
                 shape = MaterialTheme.shapes.small,
             )
             .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -54,3 +58,27 @@ fun BoxScope.CameraLiveStatus() {
         style = MaterialTheme.typography.labelMedium,
     )
 }
+
+private data class TrackingPresentation(
+    val label: String,
+    val stateDescription: String,
+    val background: Color,
+)
+
+private fun ArTrackingDiagnostics?.toPresentation(): TrackingPresentation = when {
+    this == null -> presentation("CHECKING TRACKING", "Checking AR tracking", 0xB31A1C1B)
+    phase == ArTrackingPhase.Tracking -> presentation("AR CAMERA / LIVE", "AR tracking is active", 0xB3005A55)
+    phase == ArTrackingPhase.Stopped -> presentation("TRACKING STOPPED", "AR tracking stopped", 0xB38B1E1E)
+    issue == ArTrackingIssue.InsufficientLight -> presentation("MORE LIGHT NEEDED", "Move to a brighter area", 0xB37A4E00)
+    issue == ArTrackingIssue.ExcessiveMotion -> presentation("MOVE PHONE SLOWLY", "Move the phone more slowly", 0xB37A4E00)
+    issue == ArTrackingIssue.InsufficientFeatures -> presentation("POINT AT A TEXTURED SURFACE", "Point at a surface with visible detail", 0xB37A4E00)
+    issue == ArTrackingIssue.CameraUnavailable -> presentation("CAMERA UNAVAILABLE", "The camera is unavailable", 0xB38B1E1E)
+    issue == ArTrackingIssue.BadState -> presentation("TRACKING PAUSED", "AR tracking is paused", 0xB38B1E1E)
+    else -> presentation("SEARCHING FOR SURFACE", "Searching for trackable detail", 0xB31A1C1B)
+}
+
+private fun presentation(
+    label: String,
+    stateDescription: String,
+    color: Long,
+) = TrackingPresentation(label, stateDescription, Color(color))

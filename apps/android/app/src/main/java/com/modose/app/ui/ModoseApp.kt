@@ -21,6 +21,7 @@ import com.modose.app.ar.ArCoreGateState
 import com.modose.app.ar.session.ArSessionPhase
 import com.modose.app.ar.session.ArSessionResult
 import com.modose.app.ar.session.ArCameraFrameSource
+import com.modose.app.ar.session.ArTrackingDiagnostics
 import com.modose.app.ar.render.CameraBackgroundSurfaceController
 import com.modose.app.ar.render.CameraBackgroundSurfaceFailure
 import com.modose.app.ar.render.CameraBackgroundSurfaceView
@@ -37,12 +38,14 @@ fun ModoseApp(
     arSessionResult: ArSessionResult?,
     cameraFrameSource: ArCameraFrameSource?,
     cameraBackgroundFailure: CameraBackgroundSurfaceFailure?,
+    trackingDiagnostics: ArTrackingDiagnostics?,
     onRequestCameraPermission: () -> Unit,
     onOpenApplicationSettings: () -> Unit,
     onRequestArCoreInstall: () -> Unit,
     onRetryArSession: () -> Unit,
     onRetryCameraBackground: () -> Unit,
     onCameraBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
     onCameraSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     CompositionLocalProvider(LocalAppContainer provides appContainer) {
@@ -54,10 +57,12 @@ fun ModoseApp(
                         sessionResult = arSessionResult,
                         frameSource = cameraFrameSource,
                         backgroundFailure = cameraBackgroundFailure,
+                        trackingDiagnostics = trackingDiagnostics,
                         onRequestInstall = onRequestArCoreInstall,
                         onRetrySession = onRetryArSession,
                         onRetryBackground = onRetryCameraBackground,
                         onBackgroundFailure = onCameraBackgroundFailure,
+                        onTrackingDiagnostics = onTrackingDiagnostics,
                         onSurfaceChanged = onCameraSurfaceChanged,
                     )
                 } else {
@@ -78,10 +83,12 @@ private fun ArCoreGate(
     sessionResult: ArSessionResult?,
     frameSource: ArCameraFrameSource?,
     backgroundFailure: CameraBackgroundSurfaceFailure?,
+    trackingDiagnostics: ArTrackingDiagnostics?,
     onRequestInstall: () -> Unit,
     onRetrySession: () -> Unit,
     onRetryBackground: () -> Unit,
     onBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
     onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     when (state) {
@@ -89,9 +96,11 @@ private fun ArCoreGate(
             result = sessionResult,
             frameSource = frameSource,
             backgroundFailure = backgroundFailure,
+            trackingDiagnostics = trackingDiagnostics,
             onRetry = onRetrySession,
             onRetryBackground = onRetryBackground,
             onBackgroundFailure = onBackgroundFailure,
+            onTrackingDiagnostics = onTrackingDiagnostics,
             onSurfaceChanged = onSurfaceChanged,
         )
         ArCoreGateState.Checking,
@@ -126,9 +135,11 @@ private fun ArSessionGate(
     result: ArSessionResult?,
     frameSource: ArCameraFrameSource?,
     backgroundFailure: CameraBackgroundSurfaceFailure?,
+    trackingDiagnostics: ArTrackingDiagnostics?,
     onRetry: () -> Unit,
     onRetryBackground: () -> Unit,
     onBackgroundFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
     onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     when {
@@ -148,6 +159,7 @@ private fun ArSessionGate(
                 CameraBackgroundHost(
                     frameSource = frameSource,
                     onFailure = onBackgroundFailure,
+                    onTrackingDiagnostics = onTrackingDiagnostics,
                     onSurfaceChanged = onSurfaceChanged,
                 )
             }
@@ -169,6 +181,7 @@ private fun ArSessionGate(
 private fun CameraBackgroundHost(
     frameSource: ArCameraFrameSource,
     onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
+    onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
     onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
 ) {
     val context = LocalContext.current
@@ -176,6 +189,7 @@ private fun CameraBackgroundHost(
         CameraBackgroundSurfaceView(
             context = context,
             onFailure = onFailure,
+            onTrackingDiagnostics = onTrackingDiagnostics,
         )
     }
     DisposableEffect(view) {
@@ -194,7 +208,7 @@ private fun CameraBackgroundHost(
                 update = { it.frameSource = frameSource },
             )
         },
-        overlay = { CameraLiveStatus() },
+        overlay = { CameraLiveStatus(trackingDiagnostics) },
     )
 }
 
