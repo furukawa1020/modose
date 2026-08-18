@@ -1,0 +1,80 @@
+name: Implementation
+description: One mergeable implementation change for MODOSE
+title: ""
+labels: []
+body:
+  - type: input
+    id: requirement
+    attributes:
+      label: Requirement ID
+      placeholder: FR-GDE-004 / NFR-SEC-002 / M-###
+    validations:
+      required: true
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: State one observable result.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Use testable checkboxes.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: Explicitly list neighboring work that must not enter this PR.
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      placeholder: M-001, M-014 or none
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      options:
+        - low
+        - medium
+        - high
+    validations:
+      required: true
+
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: Test plan
+      description: Unit, fixture, instrumentation, and physical evidence.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: One Issue equals one PR
+          required: true
+        - label: No unrelated refactor
+          required: true
+        - label: No untracked TODO or disabled test
+          required: true
+        - label: No image, object label, prompt, token, or PII in logs
+          required: true
