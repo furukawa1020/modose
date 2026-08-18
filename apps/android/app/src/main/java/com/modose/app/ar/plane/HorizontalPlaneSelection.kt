@@ -27,7 +27,7 @@ sealed interface HorizontalPlaneState {
 object HorizontalPlaneSelectionPolicy {
     fun select(candidates: List<HorizontalPlaneCandidate>): SelectedHorizontalPlane? = candidates
         .asSequence()
-        .filter(HorizontalPlaneCandidate::isValid)
+            .filter { candidate -> candidate.isValid() }
         .minByOrNull(HorizontalPlaneCandidate::distanceMeters)
         ?.let { candidate ->
             SelectedHorizontalPlane(
