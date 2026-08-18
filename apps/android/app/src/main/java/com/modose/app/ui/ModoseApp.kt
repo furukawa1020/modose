@@ -158,6 +158,7 @@ private fun ArSessionGate(
             } else {
                 CameraBackgroundHost(
                     frameSource = frameSource,
+                    trackingDiagnostics = trackingDiagnostics,
                     onFailure = onBackgroundFailure,
                     onTrackingDiagnostics = onTrackingDiagnostics,
                     onSurfaceChanged = onSurfaceChanged,
@@ -180,6 +181,7 @@ private fun ArSessionGate(
 @Composable
 private fun CameraBackgroundHost(
     frameSource: ArCameraFrameSource,
+    trackingDiagnostics: ArTrackingDiagnostics?,
     onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
     onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
     onSurfaceChanged: (CameraBackgroundSurfaceController?) -> Unit,
