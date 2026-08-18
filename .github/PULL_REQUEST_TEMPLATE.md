@@ -1,6 +1,15 @@
 ## Linked Issue
 
-Closes M-
+Closes #
+
+MODOSE ID: M-
+
+## Dependency
+
+- Base branch: `main`
+- Depends on: none
+
+<!-- For a stacked PR, name the non-main base branch and every blocking PR. -->
 
 ## User-visible change
 
@@ -25,10 +34,13 @@ Closes M-
 
 ## Tests
 
-- [ ] Unit
-- [ ] Contract/fixture
-- [ ] Android instrumentation or physical device, when applicable
-- [ ] Release build checked, when performance-sensitive
+Normal path:
+
+- [ ] Unit, contract, instrumentation, physical, or documentation check
+
+Failure path:
+
+- [ ] Rejection, recovery, rollback, or not applicable with reason
 
 Commands and results:
 
@@ -40,6 +52,15 @@ Commands and results:
 
 <!-- Screenshot, screen recording, log excerpt without sensitive data, or fixture name. -->
 
+- Evidence:
+- Failure evidence:
+
+## Change budget
+
+- Non-generated changed lines:
+- [ ] At or below 400 lines
+- Reason this cannot be split, if above 400:
+
 ## Risk
 
 - Risk level: low / medium / high
@@ -49,6 +70,9 @@ Commands and results:
 ## Self-review
 
 - [ ] Diff is focused and within the default 400 non-generated changed-line budget
+- [ ] Branch follows `m-###-short-slug`
+- [ ] PR title ends with `[M-###]`
+- [ ] Exactly one GitHub Issue is closed by this PR
 - [ ] Public names and errors match the glossary
 - [ ] Resource ownership and close/dispose paths were reviewed
 - [ ] No model output is trusted before schema and domain validation

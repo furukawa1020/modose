@@ -4,10 +4,19 @@ title: ""
 labels: []
 body:
   - type: input
+    id: modose_id
+    attributes:
+      label: MODOSE ID
+      description: Use exactly one backlog ID.
+      placeholder: M-###
+    validations:
+      required: true
+
+  - type: input
     id: requirement
     attributes:
       label: Requirement ID
-      placeholder: FR-GDE-004 / NFR-SEC-002 / M-###
+      placeholder: FR-GDE-004 / NFR-SEC-002 / none
     validations:
       required: true
 
@@ -42,7 +51,17 @@ body:
     id: dependencies
     attributes:
       label: Dependencies
-      placeholder: M-001, M-014 or none
+      description: Name blocking MODOSE IDs and PRs.
+      placeholder: M-001, PR #12 or none
+    validations:
+      required: true
+
+  - type: input
+    id: base_branch
+    attributes:
+      label: PR base branch
+      description: Use main, or name the parent branch for a stacked PR.
+      placeholder: main
     validations:
       required: true
 
@@ -58,10 +77,35 @@ body:
       required: true
 
   - type: textarea
-    id: test_plan
+    id: normal_path
     attributes:
-      label: Test plan
-      description: Unit, fixture, instrumentation, and physical evidence.
+      label: Normal-path test
+      description: State the command, fixture, instrumentation run, or document check that proves success.
+    validations:
+      required: true
+
+  - type: textarea
+    id: failure_path
+    attributes:
+      label: Failure-path test
+      description: State the rejection, recovery, rollback, or why failure behavior is not applicable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Name the safe log excerpt, fixture, screenshot, or recording to attach to the PR.
+    validations:
+      required: true
+
+  - type: textarea
+    id: change_budget
+    attributes:
+      label: Change budget
+      description: Confirm 400 or fewer non-generated changed lines, or explain why the Issue cannot be split.
+      placeholder: At or below 400 non-generated changed lines.
     validations:
       required: true
 
@@ -72,9 +116,13 @@ body:
       options:
         - label: One Issue equals one PR
           required: true
+        - label: One PR changes no more than one user-visible behavior
+          required: true
         - label: No unrelated refactor
           required: true
         - label: No untracked TODO or disabled test
           required: true
         - label: No image, object label, prompt, token, or PII in logs
+          required: true
+        - label: Branch and PR title follow the M-### naming rules
           required: true
