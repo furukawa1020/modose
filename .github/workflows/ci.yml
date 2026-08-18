@@ -133,6 +133,9 @@ jobs:
       - name: Lint OpenAPI
         run: bash .github/scripts/lint-openapi.sh
 
+      - name: Validate schema fixtures
+        run: bash .github/scripts/validate-schema-fixtures.sh
+
   ci-gate:
     name: CI gate
     if: always()
