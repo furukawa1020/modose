@@ -22,6 +22,9 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 import com.modose.app.ar.ArCoreAvailabilityPolicy
 import com.modose.app.ar.ArCoreFailureReason
 import com.modose.app.ar.ArCoreGateState
+import com.modose.app.ar.session.ArCoreSessionLifecycle
+import com.modose.app.ar.session.ArSessionActivityCoordinator
+import com.modose.app.ar.session.ArSessionResult
 import com.modose.app.permission.CameraPermissionPolicy
 import com.modose.app.permission.CameraPermissionState
 import com.modose.app.ui.ModoseApp
@@ -30,6 +33,13 @@ class MainActivity : ComponentActivity() {
     private val appContainer by lazy { (application as ModoseApplication).appContainer }
     private var cameraPermissionState by mutableStateOf(CameraPermissionState.InitialRequest)
     private var arCoreGateState by mutableStateOf<ArCoreGateState>(ArCoreGateState.Checking)
+    private var arSessionResult by mutableStateOf<ArSessionResult?>(null)
+    private val arSessionCoordinator by lazy {
+        ArSessionActivityCoordinator(
+            lifecycleFactory = { ArCoreSessionLifecycle(applicationContext) },
+            onResult = { arSessionResult = it },
+        )
+    }
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -46,16 +56,29 @@ class MainActivity : ComponentActivity() {
                 appContainer = appContainer,
                 cameraPermissionState = cameraPermissionState,
                 arCoreGateState = arCoreGateState,
+                arSessionResult = arSessionResult,
                 onRequestCameraPermission = ::requestCameraPermission,
                 onOpenApplicationSettings = ::openApplicationSettings,
                 onRequestArCoreInstall = ::requestArCoreInstall,
+                onRetryArSession = arSessionCoordinator::retry,
             )
         }
     }
 
     override fun onResume() {
         super.onResume()
+        arSessionCoordinator.onResume()
         refreshCameraPermission()
+    }
+
+    override fun onPause() {
+        arSessionCoordinator.onPause()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        arSessionCoordinator.onDestroy()
+        super.onDestroy()
     }
 
     private fun requestCameraPermission() {
@@ -83,6 +106,8 @@ class MainActivity : ComponentActivity() {
         )
         if (cameraPermissionState == CameraPermissionState.Granted) {
             refreshArCoreAvailability()
+        } else {
+            arSessionCoordinator.onPrerequisiteUnavailable()
         }
     }
 
@@ -90,6 +115,11 @@ class MainActivity : ComponentActivity() {
         arCoreGateState = ArCoreGateState.Checking
         ArCoreApk.getInstance().checkAvailabilityAsync(applicationContext) { availability ->
             arCoreGateState = ArCoreAvailabilityPolicy.resolve(availability)
+            if (arCoreGateState == ArCoreGateState.Ready && !isDestroyed) {
+                arSessionCoordinator.onArCoreReady()
+            } else {
+                arSessionCoordinator.onPrerequisiteUnavailable()
+            }
         }
     }
 
@@ -97,7 +127,10 @@ class MainActivity : ComponentActivity() {
         try {
             arCoreGateState = when (ArCoreApk.getInstance().requestInstall(this, true)) {
                 ArCoreApk.InstallStatus.INSTALL_REQUESTED -> ArCoreGateState.Installing
-                ArCoreApk.InstallStatus.INSTALLED -> ArCoreGateState.Ready
+                ArCoreApk.InstallStatus.INSTALLED -> {
+                    refreshArCoreAvailability()
+                    ArCoreGateState.Checking
+                }
             }
         } catch (_: UnavailableDeviceNotCompatibleException) {
             arCoreGateState = ArCoreGateState.Unsupported
