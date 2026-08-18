@@ -28,6 +28,7 @@ import com.modose.app.ar.session.ArSessionActivityCoordinator
 import com.modose.app.ar.session.ArSessionResult
 import com.modose.app.ar.render.CameraBackgroundSurfaceController
 import com.modose.app.ar.render.CameraBackgroundSurfaceFailure
+import com.modose.app.ar.render.CameraSurfaceControllerRegistry
 import com.modose.app.permission.CameraPermissionPolicy
 import com.modose.app.permission.CameraPermissionState
 import com.modose.app.ui.ModoseApp
@@ -39,7 +40,7 @@ class MainActivity : ComponentActivity() {
     private var arSessionResult by mutableStateOf<ArSessionResult?>(null)
     private var cameraFrameSource by mutableStateOf<ArCameraFrameSource?>(null)
     private var cameraBackgroundFailure by mutableStateOf<CameraBackgroundSurfaceFailure?>(null)
-    private var cameraSurfaceController: CameraBackgroundSurfaceController? = null
+    private val cameraSurfaceRegistry = CameraSurfaceControllerRegistry()
     private val arSessionCoordinator by lazy {
         ArSessionActivityCoordinator(
             lifecycleFactory = { ArCoreSessionLifecycle(applicationContext) },
@@ -72,7 +73,7 @@ class MainActivity : ComponentActivity() {
                 onRetryArSession = arSessionCoordinator::retry,
                 onRetryCameraBackground = ::retryCameraBackground,
                 onCameraBackgroundFailure = { cameraBackgroundFailure = it },
-                onCameraSurfaceChanged = { cameraSurfaceController = it },
+                onCameraSurfaceChanged = cameraSurfaceRegistry::replace,
             )
         }
     }
@@ -80,19 +81,18 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         arSessionCoordinator.onResume()
-        cameraSurfaceController?.onActivityResume()
+        cameraSurfaceRegistry.onActivityResume()
         refreshCameraPermission()
     }
 
     override fun onPause() {
-        cameraSurfaceController?.onActivityPause()
+        cameraSurfaceRegistry.onActivityPause()
         arSessionCoordinator.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
-        cameraSurfaceController?.releaseSurface()
-        cameraSurfaceController = null
+        cameraSurfaceRegistry.onDestroy()
         arSessionCoordinator.onDestroy()
         super.onDestroy()
     }
