@@ -1,6 +1,8 @@
 package com.modose.app.ar.session
 
 import com.modose.app.ar.anchor.SceneAnchorState
+import com.modose.app.ar.coordinates.ImageViewTransformFrameResult
+import com.modose.app.ar.coordinates.ImageViewTransformUnavailableReason
 import com.modose.app.ar.image.CpuImageAcquisitionResult
 import com.modose.app.ar.image.CpuImageRuntimeSkipReason
 import com.modose.app.ar.plane.HorizontalPlaneState
@@ -17,6 +19,10 @@ data class ArCameraFrame(
     val cpuImageResult: CpuImageAcquisitionResult = CpuImageAcquisitionResult.Skipped(
         CpuImageRuntimeSkipReason.NotRequested,
     ),
+    val imageViewTransformResult: ImageViewTransformFrameResult =
+        ImageViewTransformFrameResult.Unavailable(
+            ImageViewTransformUnavailableReason.SourceImageUnavailable,
+        ),
 )
 
 enum class ArTrackingPhase {
