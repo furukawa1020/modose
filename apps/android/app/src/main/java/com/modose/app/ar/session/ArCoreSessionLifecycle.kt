@@ -15,6 +15,14 @@ import com.modose.app.ar.anchor.SceneAnchorSnapshot
 import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.anchor.SceneAnchorStateTracker
 import com.modose.app.ar.anchor.SceneAnchorTrackingState
+import com.modose.app.ar.image.AndroidCpuImageSource
+import com.modose.app.ar.image.CpuCameraImageCopier
+import com.modose.app.ar.image.CpuImageAcquisitionDecision
+import com.modose.app.ar.image.CpuImageAcquisitionPolicy
+import com.modose.app.ar.image.CpuImageAcquisitionResult
+import com.modose.app.ar.image.CpuImageFailureReason
+import com.modose.app.ar.image.CpuImageRuntimeSkipReason
+import com.modose.app.ar.image.CpuImageSkipReason
 import com.modose.app.ar.plane.HorizontalPlaneCandidate
 import com.modose.app.ar.plane.HorizontalPlaneSelectionPolicy
 import com.modose.app.ar.plane.HorizontalPlaneState
@@ -22,7 +30,9 @@ import com.modose.app.ar.plane.HorizontalPlaneStateTracker
 import com.modose.app.ar.plane.SelectedHorizontalPlane
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.NotTrackingException
+import com.google.ar.core.exceptions.NotYetAvailableException
 import com.google.ar.core.exceptions.ResourceExhaustedException
+import com.google.ar.core.exceptions.DeadlineExceededException
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
@@ -50,6 +60,8 @@ private class AndroidArSessionRuntime(
 ) : ArSessionRuntime {
     private val planeStateTracker = HorizontalPlaneStateTracker()
     private val anchorStateTracker = SceneAnchorStateTracker()
+    private val cpuImagePolicy = CpuImageAcquisitionPolicy()
+    private val cpuImageCopier = CpuCameraImageCopier()
     private var selectedPlane: Plane? = null
     private var selectedPlaneHitPose: Pose? = null
     private var selectedPlaneDistanceMeters = 0f
@@ -62,6 +74,7 @@ private class AndroidArSessionRuntime(
         sceneAnchor?.detach()
         sceneAnchor = null
         anchorStateTracker.reset()
+        cpuImagePolicy.reset()
         selectedPlane = null
         selectedPlaneHitPose = null
         planeStateTracker.reset()
@@ -101,7 +114,48 @@ private class AndroidArSessionRuntime(
             ),
             horizontalPlaneState = horizontalPlaneState,
             sceneAnchorState = updateSceneAnchorState(horizontalPlaneState),
+            cpuImageResult = acquireCpuImage(frame),
         )
+    }
+
+    private fun acquireCpuImage(
+        frame: com.google.ar.core.Frame,
+    ): CpuImageAcquisitionResult {
+        return when (
+            val decision = cpuImagePolicy.decide(
+                frameTimestampNanos = frame.timestamp,
+                isTracking = frame.camera.trackingState == TrackingState.TRACKING,
+            )
+        ) {
+            CpuImageAcquisitionDecision.Acquire -> acquireRequestedCpuImage(frame)
+            is CpuImageAcquisitionDecision.Skip -> CpuImageAcquisitionResult.Skipped(
+                decision.reason.toRuntimeSkipReason(),
+            )
+        }
+    }
+
+    private fun acquireRequestedCpuImage(
+        frame: com.google.ar.core.Frame,
+    ): CpuImageAcquisitionResult = try {
+        cpuImageCopier.copy(AndroidCpuImageSource(frame.acquireCameraImage())).also { result ->
+            if (result is CpuImageAcquisitionResult.Acquired) {
+                cpuImagePolicy.markDelivered(result.image.timestampNanos)
+            }
+        }
+    } catch (_: NotYetAvailableException) {
+        CpuImageAcquisitionResult.Skipped(CpuImageRuntimeSkipReason.NotAvailable)
+    } catch (_: DeadlineExceededException) {
+        CpuImageAcquisitionResult.Failed(CpuImageFailureReason.DeadlineExceeded)
+    } catch (_: RuntimeException) {
+        CpuImageAcquisitionResult.Failed(CpuImageFailureReason.AcquisitionFailed)
+    }
+
+    private fun CpuImageSkipReason.toRuntimeSkipReason(): CpuImageRuntimeSkipReason = when (this) {
+        CpuImageSkipReason.TrackingUnavailable -> CpuImageRuntimeSkipReason.TrackingUnavailable
+        CpuImageSkipReason.NotDue,
+        CpuImageSkipReason.DuplicateTimestamp,
+        CpuImageSkipReason.InvalidTimestamp,
+        -> CpuImageRuntimeSkipReason.NotRequested
     }
 
     private fun updateHorizontalPlaneState(

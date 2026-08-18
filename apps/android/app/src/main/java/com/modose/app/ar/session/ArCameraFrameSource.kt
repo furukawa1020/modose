@@ -1,6 +1,8 @@
 package com.modose.app.ar.session
 
 import com.modose.app.ar.anchor.SceneAnchorState
+import com.modose.app.ar.image.CpuImageAcquisitionResult
+import com.modose.app.ar.image.CpuImageRuntimeSkipReason
 import com.modose.app.ar.plane.HorizontalPlaneState
 
 data class ArCameraFrame(
@@ -12,6 +14,9 @@ data class ArCameraFrame(
     ),
     val horizontalPlaneState: HorizontalPlaneState = HorizontalPlaneState.Searching,
     val sceneAnchorState: SceneAnchorState = SceneAnchorState.Unavailable,
+    val cpuImageResult: CpuImageAcquisitionResult = CpuImageAcquisitionResult.Skipped(
+        CpuImageRuntimeSkipReason.NotRequested,
+    ),
 )
 
 enum class ArTrackingPhase {
