@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.modose.app.ar.plane.HorizontalPlaneState
 import com.modose.app.ar.session.ArTrackingDiagnostics
 import com.modose.app.ar.session.ArTrackingIssue
 import com.modose.app.ar.session.ArTrackingPhase
@@ -38,8 +39,15 @@ fun CameraOverlayHost(
 }
 
 @Composable
-fun BoxScope.CameraLiveStatus(diagnostics: ArTrackingDiagnostics?) {
-    val presentation = diagnostics.toPresentation()
+fun BoxScope.CameraLiveStatus(
+    diagnostics: ArTrackingDiagnostics?,
+    horizontalPlaneState: HorizontalPlaneState?,
+) {
+    val presentation = if (diagnostics?.phase == ArTrackingPhase.Tracking) {
+        horizontalPlaneState.toPresentation()
+    } else {
+        diagnostics.toPresentation()
+    }
     Text(
         text = presentation.label,
         modifier = Modifier
@@ -75,6 +83,14 @@ private fun ArTrackingDiagnostics?.toPresentation(): TrackingPresentation = when
     issue == ArTrackingIssue.CameraUnavailable -> presentation("CAMERA UNAVAILABLE", "The camera is unavailable", 0xB38B1E1E)
     issue == ArTrackingIssue.BadState -> presentation("TRACKING PAUSED", "AR tracking is paused", 0xB38B1E1E)
     else -> presentation("SEARCHING FOR SURFACE", "Searching for trackable detail", 0xB31A1C1B)
+}
+
+private fun HorizontalPlaneState?.toPresentation(): TrackingPresentation = when (this) {
+    null,
+    HorizontalPlaneState.Searching,
+    -> presentation("FINDING SURFACE", "Searching for a horizontal surface", 0xB31A1C1B)
+    is HorizontalPlaneState.Tracking -> presentation("SURFACE READY", "Horizontal surface is ready", 0xB3005A55)
+    is HorizontalPlaneState.Lost -> presentation("SURFACE LOST", "Horizontal surface tracking was lost", 0xB38B1E1E)
 }
 
 private fun presentation(
