@@ -1,0 +1,399 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+
+info:
+  title: MODOSE Vision API
+  version: 1.0.0
+  description: |
+    Authenticated API for Baseline, Compare, Verify, and privacy-safe scene
+    metadata. Scene images are processed ephemerally and are not persisted by
+    default. A complete request is limited to 4.5 MB.
+
+servers:
+  - url: /
+
+tags:
+  - name: Health
+  - name: Vision
+  - name: Scenes
+
+security:
+  - firebaseAuth: []
+    firebaseAppCheck: []
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Report whether the process is alive
+      security: []
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '500':
+          $ref: '#/components/responses/Error'
+
+  /readyz:
+    get:
+      tags: [Health]
+      operationId: getReadiness
+      summary: Report whether required clients are initialized
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          $ref: '#/components/responses/Error'
+
+  /v1/vision/baseline:
+    post:
+      tags: [Vision]
+      operationId: analyzeBaseline
+      summary: Analyze the saved scene
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ClientVersion'
+        - $ref: '#/components/parameters/SchemaVersion'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BaselineRequest'
+      responses:
+        '200':
+          description: Baseline analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaselineAnalysis'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+        '504': { $ref: '#/components/responses/Error' }
+
+  /v1/vision/compare:
+    post:
+      tags: [Vision]
+      operationId: compareScene
+      summary: Compare the saved and current scenes
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ClientVersion'
+        - $ref: '#/components/parameters/SchemaVersion'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompareRequest'
+      responses:
+        '200':
+          description: Scene comparison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SceneComparison'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+        '504': { $ref: '#/components/responses/Error' }
+
+  /v1/vision/verify:
+    post:
+      tags: [Vision]
+      operationId: verifyScene
+      summary: Verify the final restored scene
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ClientVersion'
+        - $ref: '#/components/parameters/SchemaVersion'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      responses:
+        '200':
+          description: Final scene verification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SceneVerification'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+        '504': { $ref: '#/components/responses/Error' }
+
+  /v1/scenes/metadata:
+    post:
+      tags: [Scenes]
+      operationId: storeSceneMetadata
+      summary: Store privacy-safe scene result metadata
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ClientVersion'
+        - $ref: '#/components/parameters/SchemaVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SceneMetadata'
+      responses:
+        '200':
+          description: Stored metadata version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoredMetadata'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+
+  /v1/scenes/{sceneId}:
+    delete:
+      tags: [Scenes]
+      operationId: deleteSceneMetadata
+      summary: Delete scene metadata owned by the authenticated user
+      parameters:
+        - $ref: '#/components/parameters/SceneId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ClientVersion'
+        - $ref: '#/components/parameters/SchemaVersion'
+      responses:
+        '204':
+          description: Metadata is absent
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+
+components:
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase-ID-Token
+    firebaseAppCheck:
+      type: apiKey
+      in: header
+      name: X-Firebase-AppCheck
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUIDv7 retained across a retry.
+    ClientVersion:
+      name: X-Client-Version
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    SchemaVersion:
+      name: X-Schema-Version
+      in: header
+      required: true
+      schema:
+        type: string
+        const: '1'
+    SceneId:
+      name: sceneId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Error:
+      description: Typed request or dependency failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+
+    Image:
+      type: string
+      format: binary
+      description: JPEG or WebP image, at most 2 MB after normalization.
+
+    CaptureMetadata:
+      type: object
+      additionalProperties: false
+      required: [sceneId, capturedAt]
+      properties:
+        sceneId:
+          type: string
+          format: uuid
+        capturedAt:
+          type: string
+          format: date-time
+
+    BaselineRequest:
+      type: object
+      additionalProperties: false
+      required: [metadata, image]
+      properties:
+        metadata:
+          $ref: '#/components/schemas/CaptureMetadata'
+        image:
+          $ref: '#/components/schemas/Image'
+
+    CompareRequest:
+      type: object
+      additionalProperties: false
+      required: [metadata, baselineImage, currentImage, confirmedObjects]
+      properties:
+        metadata:
+          $ref: '#/components/schemas/CaptureMetadata'
+        baselineImage:
+          $ref: '#/components/schemas/Image'
+        currentImage:
+          $ref: '#/components/schemas/Image'
+        confirmedObjects:
+          type: string
+          description: JSON metadata part; strict schema is added by M-007.
+
+    VerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [metadata, baselineImage, finalImage, confirmedObjects]
+      properties:
+        metadata:
+          $ref: '#/components/schemas/CaptureMetadata'
+        baselineImage:
+          $ref: '#/components/schemas/Image'
+        finalImage:
+          $ref: '#/components/schemas/Image'
+        confirmedObjects:
+          type: string
+          description: JSON metadata part; strict schema is added by M-007.
+
+    BaselineAnalysis:
+      $ref: '#/components/schemas/VisionEnvelope'
+    SceneComparison:
+      $ref: '#/components/schemas/VisionEnvelope'
+    SceneVerification:
+      $ref: '#/components/schemas/VisionEnvelope'
+
+    VisionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, modelId, promptVersion]
+      properties:
+        schemaVersion:
+          type: string
+          const: '1'
+        modelId:
+          type: string
+          minLength: 1
+        promptVersion:
+          type: string
+          minLength: 1
+
+    SceneMetadata:
+      type: object
+      additionalProperties: false
+      required: [sceneId, result, objectCount, schemaVersion]
+      properties:
+        sceneId:
+          type: string
+          format: uuid
+        result:
+          type: string
+          enum: [verified, needs_correction, uncertain]
+        objectCount:
+          type: integer
+          minimum: 1
+          maximum: 5
+        schemaVersion:
+          type: string
+          const: '1'
+
+    StoredMetadata:
+      type: object
+      additionalProperties: false
+      required: [sceneId, version]
+      properties:
+        sceneId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, retryable, requestId]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+        retryable:
+          type: boolean
+        requestId:
+          type: string
+          format: uuid

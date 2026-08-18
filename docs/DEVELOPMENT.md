@@ -61,3 +61,9 @@ The module contains only a package declaration. The HTTP service is introduced b
 `.github/workflows/ci.yml` classifies changed paths and runs only the applicable
 Android, Rust, Go, and contract baseline jobs. The stable `CI gate` check aggregates
 successful and skipped jobs and is the check intended for `main` branch protection.
+
+Lint the OpenAPI 3.1 contract with the pinned Go validator:
+
+```sh
+bash .github/scripts/lint-openapi.sh
+```
