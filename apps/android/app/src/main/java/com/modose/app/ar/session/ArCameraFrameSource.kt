@@ -3,6 +3,31 @@ package com.modose.app.ar.session
 data class ArCameraFrame(
     val timestampNanos: Long,
     val transformedTextureCoordinates: FloatArray?,
+    val trackingDiagnostics: ArTrackingDiagnostics = ArTrackingDiagnostics(
+        phase = ArTrackingPhase.Paused,
+        issue = ArTrackingIssue.Unknown,
+    ),
+)
+
+enum class ArTrackingPhase {
+    Tracking,
+    Paused,
+    Stopped,
+}
+
+enum class ArTrackingIssue {
+    None,
+    BadState,
+    InsufficientLight,
+    ExcessiveMotion,
+    InsufficientFeatures,
+    CameraUnavailable,
+    Unknown,
+}
+
+data class ArTrackingDiagnostics(
+    val phase: ArTrackingPhase,
+    val issue: ArTrackingIssue,
 )
 
 enum class ArCameraFrameFailureReason {
