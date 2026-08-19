@@ -106,6 +106,9 @@ jobs:
       - name: Build Go module
         run: go -C services/vision-api build ./...
 
+      - name: Test Go module
+        run: go -C services/vision-api test ./...
+
   contract:
     name: Contract baseline
     needs: changes
