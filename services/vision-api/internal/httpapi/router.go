@@ -23,9 +23,14 @@ type Router struct {
 }
 
 func NewRouter(probe ReadinessProbe) *Router {
+	return NewRouterWithBaseline(probe, nil)
+}
+
+func NewRouterWithBaseline(probe ReadinessProbe, analyzer BaselineAnalyzer) *Router {
 	router := &Router{mux: http.NewServeMux()}
 	router.mux.HandleFunc("/healthz", getOnly(health))
 	router.mux.HandleFunc("/readyz", getOnly(readiness(probe)))
+	router.mux.HandleFunc("/v1/vision/baseline", postOnly(baselineHandler(analyzer)))
 	return router
 }
 
@@ -39,9 +44,17 @@ func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 }
 
 func getOnly(next http.HandlerFunc) http.HandlerFunc {
+	return methodOnly(http.MethodGet, next)
+}
+
+func postOnly(next http.HandlerFunc) http.HandlerFunc {
+	return methodOnly(http.MethodPost, next)
+}
+
+func methodOnly(method string, next http.HandlerFunc) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodGet {
-			writer.Header().Set("Allow", http.MethodGet)
+		if request.Method != method {
+			writer.Header().Set("Allow", method)
 			apierror.Write(writer, http.StatusMethodNotAllowed, apierror.MethodNotAllowed)
 			return
 		}
