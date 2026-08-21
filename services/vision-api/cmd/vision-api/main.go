@@ -7,15 +7,22 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/furukawa1020/modose/services/vision-api/internal/baselineapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/config"
 	"github.com/furukawa1020/modose/services/vision-api/internal/httpapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/server"
+	"github.com/furukawa1020/modose/services/vision-api/internal/vertex"
 )
 
 func main() {
 	serviceConfig, err := config.Load(os.LookupEnv)
 	if err != nil {
 		log.Printf("service configuration rejected: %v", err)
+		os.Exit(2)
+	}
+	vertexConfig, err := vertex.LoadConfig(os.LookupEnv)
+	if err != nil {
+		log.Printf("Vertex configuration rejected: %v", err)
 		os.Exit(2)
 	}
 
@@ -26,8 +33,15 @@ func main() {
 	)
 	defer stop()
 
-	router := httpapi.NewRouter(
+	vertexClient, err := vertex.NewClient(ctx, vertexConfig)
+	if err != nil {
+		log.Printf("Vertex client initialization failed: %v", err)
+		os.Exit(2)
+	}
+	baselineService := baselineapi.NewService(vertexClient)
+	router := httpapi.NewRouterWithBaseline(
 		httpapi.ReadinessProbeFunc(func(context.Context) error { return nil }),
+		baselineService,
 	)
 	if err := server.Run(ctx, serviceConfig, router); err != nil {
 		log.Printf("vision service stopped with error: %v", err)
