@@ -1,1 +1,17 @@
-{"schemaVersion":"1.0","status":"ok","modelId":"fixture-model","promptVersion":"baseline-v1","sceneQuality":{"handsPresent":false,"tooManyObjects":false,"supported":true,"reasonCodes":[]},"objects":[],"unexpected":true}
+{
+  "schemaVersion": "1.0",
+  "status": "ok",
+  "modelId": "fixture-model",
+  "promptVersion": "baseline-v1",
+  "repaired": false,
+  "objects": [{
+    "id": "wallet",
+    "displayName": "黒い財布",
+    "appearanceFeatures": ["黒色"],
+    "boundingBox": {"yMin": 100, "xMin": 200, "yMax": 500, "xMax": 700},
+    "orientationImportant": true,
+    "symmetry": "none",
+    "unexpected": true
+  }],
+  "excludedCandidates": []
+}
