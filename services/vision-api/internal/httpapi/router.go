@@ -21,6 +21,7 @@ func (function ReadinessProbeFunc) Ready(ctx context.Context) error {
 type VisionAnalyzers struct {
 	Baseline BaselineAnalyzer
 	Compare  CompareAnalyzer
+	Verify   VerifyAnalyzer
 }
 
 type Router struct {
@@ -41,6 +42,7 @@ func NewVisionRouter(probe ReadinessProbe, analyzers VisionAnalyzers) *Router {
 	router.mux.HandleFunc("/readyz", getOnly(readiness(probe)))
 	router.mux.HandleFunc("/v1/vision/baseline", postOnly(baselineHandler(analyzers.Baseline)))
 	router.mux.HandleFunc("/v1/vision/compare", postOnly(compareHandler(analyzers.Compare)))
+	router.mux.HandleFunc("/v1/vision/verify", postOnly(verifyHandler(analyzers.Verify)))
 	return router
 }
 

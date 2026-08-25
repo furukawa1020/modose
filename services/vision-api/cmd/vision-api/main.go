@@ -12,6 +12,7 @@ import (
 	"github.com/furukawa1020/modose/services/vision-api/internal/config"
 	"github.com/furukawa1020/modose/services/vision-api/internal/httpapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/server"
+	"github.com/furukawa1020/modose/services/vision-api/internal/verifyapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/vertex"
 )
 
@@ -41,11 +42,13 @@ func main() {
 	}
 	baselineService := baselineapi.NewService(vertexClient)
 	compareService := compareapi.NewService(vertexClient)
+	verifyService := verifyapi.NewService(vertexClient)
 	router := httpapi.NewVisionRouter(
 		httpapi.ReadinessProbeFunc(func(context.Context) error { return nil }),
 		httpapi.VisionAnalyzers{
 			Baseline: baselineService,
 			Compare:  compareService,
+			Verify:   verifyService,
 		},
 	)
 	if err := server.Run(ctx, serviceConfig, router); err != nil {
