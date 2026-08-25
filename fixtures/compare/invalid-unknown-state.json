@@ -1,1 +1,15 @@
-{"schemaVersion":"1.0","status":"ok","modelId":"fixture-model","promptVersion":"compare-v1","matches":[{"sceneObjectId":"obj_01","state":"teleported","currentBoundingBox":null,"sameObjectConfidence":0.9,"orientationDeltaDegrees":null,"occludedBy":null,"reasonCodes":[]}],"extraObjects":[]}
+{
+  "schemaVersion": "1.0",
+  "status": "ok",
+  "modelId": "fixture-model",
+  "promptVersion": "compare-v1",
+  "repaired": false,
+  "matches": [{
+    "baselineObjectId": "wallet",
+    "state": "teleported",
+    "confidence": 0.9,
+    "currentBox": null,
+    "ambiguityReason": ""
+  }],
+  "addedObjects": []
+}
