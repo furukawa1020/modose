@@ -18,19 +18,29 @@ func (function ReadinessProbeFunc) Ready(ctx context.Context) error {
 	return function(ctx)
 }
 
+type VisionAnalyzers struct {
+	Baseline BaselineAnalyzer
+	Compare  CompareAnalyzer
+}
+
 type Router struct {
 	mux *http.ServeMux
 }
 
 func NewRouter(probe ReadinessProbe) *Router {
-	return NewRouterWithBaseline(probe, nil)
+	return NewVisionRouter(probe, VisionAnalyzers{})
 }
 
 func NewRouterWithBaseline(probe ReadinessProbe, analyzer BaselineAnalyzer) *Router {
+	return NewVisionRouter(probe, VisionAnalyzers{Baseline: analyzer})
+}
+
+func NewVisionRouter(probe ReadinessProbe, analyzers VisionAnalyzers) *Router {
 	router := &Router{mux: http.NewServeMux()}
 	router.mux.HandleFunc("/healthz", getOnly(health))
 	router.mux.HandleFunc("/readyz", getOnly(readiness(probe)))
-	router.mux.HandleFunc("/v1/vision/baseline", postOnly(baselineHandler(analyzer)))
+	router.mux.HandleFunc("/v1/vision/baseline", postOnly(baselineHandler(analyzers.Baseline)))
+	router.mux.HandleFunc("/v1/vision/compare", postOnly(compareHandler(analyzers.Compare)))
 	return router
 }
 

@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/furukawa1020/modose/services/vision-api/internal/baselineapi"
+	"github.com/furukawa1020/modose/services/vision-api/internal/compareapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/config"
 	"github.com/furukawa1020/modose/services/vision-api/internal/httpapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/server"
@@ -39,9 +40,13 @@ func main() {
 		os.Exit(2)
 	}
 	baselineService := baselineapi.NewService(vertexClient)
-	router := httpapi.NewRouterWithBaseline(
+	compareService := compareapi.NewService(vertexClient)
+	router := httpapi.NewVisionRouter(
 		httpapi.ReadinessProbeFunc(func(context.Context) error { return nil }),
-		baselineService,
+		httpapi.VisionAnalyzers{
+			Baseline: baselineService,
+			Compare:  compareService,
+		},
 	)
 	if err := server.Run(ctx, serviceConfig, router); err != nil {
 		log.Printf("vision service stopped with error: %v", err)
