@@ -4,44 +4,86 @@
   "title": "SceneVerification",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "status", "modelId", "promptVersion", "objects", "overall"],
+  "required": [
+    "schemaVersion",
+    "status",
+    "modelId",
+    "promptVersion",
+    "repaired",
+    "verificationStatus",
+    "corrections",
+    "uncertaintyReason"
+  ],
   "properties": {
     "schemaVersion": {"const": "1.0"},
     "status": {"const": "ok"},
     "modelId": {"type": "string", "minLength": 1, "maxLength": 128},
-    "promptVersion": {"type": "string", "minLength": 1, "maxLength": 64},
-    "objects": {
+    "promptVersion": {"const": "verify-v1"},
+    "repaired": {"type": "boolean"},
+    "verificationStatus": {
+      "enum": ["verified", "needs_correction", "uncertain"]
+    },
+    "corrections": {
       "type": "array",
-      "minItems": 1,
       "maxItems": 5,
-      "items": {"$ref": "#/$defs/Verification"}
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/Correction"}
     },
-    "overall": {"enum": ["verified", "needs_correction", "uncertain"]}
+    "uncertaintyReason": {"type": "string", "maxLength": 512}
   },
-  "$defs": {
-    "ReasonCode": {
-      "enum": [
-        "POSITION_ALIGNED",
-        "POSITION_CHANGED",
-        "ORIENTATION_CHANGED",
-        "OBJECT_MISSING",
-        "OBJECT_AMBIGUOUS",
-        "LOW_CONFIDENCE"
-      ]
+  "allOf": [
+    {
+      "if": {
+        "properties": {"verificationStatus": {"const": "verified"}},
+        "required": ["verificationStatus"]
+      },
+      "then": {
+        "properties": {
+          "corrections": {"maxItems": 0},
+          "uncertaintyReason": {"maxLength": 0}
+        }
+      }
     },
-    "Verification": {
+    {
+      "if": {
+        "properties": {"verificationStatus": {"const": "needs_correction"}},
+        "required": ["verificationStatus"]
+      },
+      "then": {
+        "properties": {
+          "corrections": {"minItems": 1},
+          "uncertaintyReason": {"maxLength": 0}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"verificationStatus": {"const": "uncertain"}},
+        "required": ["verificationStatus"]
+      },
+      "then": {
+        "properties": {
+          "corrections": {"maxItems": 0},
+          "uncertaintyReason": {"minLength": 1}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Correction": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sceneObjectId", "result", "confidence", "reasonCodes"],
+      "required": ["baselineObjectId", "reason"],
       "properties": {
-        "sceneObjectId": {"type": "string", "pattern": "^obj_[0-9]{2}$"},
-        "result": {"enum": ["verified", "needs_correction", "uncertain"]},
-        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "reasonCodes": {
-          "type": "array",
-          "uniqueItems": true,
-          "maxItems": 6,
-          "items": {"$ref": "#/$defs/ReasonCode"}
+        "baselineObjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
         }
       }
     }
