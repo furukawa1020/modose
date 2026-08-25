@@ -1,16 +1,16 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
+	"mime"
 	"net/http"
 	"strings"
 
+	"github.com/furukawa1020/modose/services/vision-api/internal/apierror"
 	"github.com/furukawa1020/modose/services/vision-api/internal/baseline"
 	"github.com/furukawa1020/modose/services/vision-api/internal/compare"
 	"github.com/furukawa1020/modose/services/vision-api/internal/compareapi"
@@ -31,43 +31,45 @@ type compareResponse struct {
 }
 
 func compareHandler(analyzer CompareAnalyzer) http.HandlerFunc {
-	return func(response http.ResponseWriter, request *http.Request) {
+	return func(writer http.ResponseWriter, request *http.Request) {
 		if analyzer == nil {
-			writeError(response, http.StatusServiceUnavailable, upstreamFailure, "Compare解析を利用できません")
+			apierror.Write(writer, http.StatusServiceUnavailable, upstreamFailure)
 			return
 		}
-		if err := validateVisionHeaders(request); err != nil {
-			writeError(response, http.StatusBadRequest, invalidRequest, err.Error())
+		if err := validateCompareHeaders(request); err != nil {
+			apierror.Write(writer, http.StatusBadRequest, invalidRequest)
 			return
 		}
 
-		request.Body = http.MaxBytesReader(response, request.Body, MaxVisionRequestBytes)
+		request.Body = http.MaxBytesReader(writer, request.Body, MaxVisionRequestBytes)
 		if err := request.ParseMultipartForm(MaxVisionRequestBytes); err != nil {
-			status, code := http.StatusBadRequest, invalidRequest
-			if strings.Contains(err.Error(), "request body too large") {
-				status, code = http.StatusRequestEntityTooLarge, payloadTooLarge
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				apierror.Write(writer, http.StatusRequestEntityTooLarge, payloadTooLarge)
+				return
 			}
-			writeError(response, status, code, "multipartリクエストが不正です")
+			apierror.Write(writer, http.StatusBadRequest, invalidRequest)
 			return
 		}
+		defer request.MultipartForm.RemoveAll()
 
-		if _, err := decodeMetadata(request.FormValue("metadata")); err != nil {
-			writeError(response, http.StatusBadRequest, invalidRequest, "metadataが不正です")
+		if err := decodeMetadata(request.FormValue("metadata")); err != nil {
+			apierror.Write(writer, http.StatusBadRequest, invalidRequest)
 			return
 		}
 		confirmed, err := decodeConfirmedObjects(request.FormValue("confirmedObjects"))
 		if err != nil {
-			writeError(response, http.StatusUnprocessableEntity, analysisRejected, err.Error())
+			apierror.Write(writer, http.StatusUnprocessableEntity, analysisRejected)
 			return
 		}
-		savedJPEG, err := readJPEG(request, "baselineImage")
-		if err != nil {
-			writeUploadError(response, err)
+		savedJPEG, status, problem := readCompareJPEG(request, "baselineImage")
+		if problem != nil {
+			apierror.Write(writer, status, *problem)
 			return
 		}
-		currentJPEG, err := readJPEG(request, "currentImage")
-		if err != nil {
-			writeUploadError(response, err)
+		currentJPEG, status, problem := readCompareJPEG(request, "currentImage")
+		if problem != nil {
+			apierror.Write(writer, status, *problem)
 			return
 		}
 
@@ -75,18 +77,18 @@ func compareHandler(analyzer CompareAnalyzer) http.HandlerFunc {
 		if err != nil {
 			var serviceError *compareapi.Error
 			if errors.As(err, &serviceError) && serviceError.Stage == compareapi.StageRequest {
-				writeError(response, http.StatusUnprocessableEntity, analysisRejected, "Compare解析要求を受理できません")
+				apierror.Write(writer, http.StatusUnprocessableEntity, analysisRejected)
 				return
 			}
-			writeError(response, http.StatusBadGateway, upstreamFailure, "Compare解析に失敗しました")
+			apierror.Write(writer, http.StatusBadGateway, upstreamFailure)
 			return
 		}
 		if len(output.Attempts) == 0 || output.Attempts[len(output.Attempts)-1].ModelID == "" {
-			writeError(response, http.StatusBadGateway, upstreamFailure, "Compare解析メタデータが不正です")
+			apierror.Write(writer, http.StatusBadGateway, upstreamFailure)
 			return
 		}
 
-		writeJSON(response, http.StatusOK, compareResponse{
+		response := compareResponse{
 			SchemaVersion: "1.0",
 			Status:        "ok",
 			ModelID:       output.Attempts[len(output.Attempts)-1].ModelID,
@@ -94,23 +96,23 @@ func compareHandler(analyzer CompareAnalyzer) http.HandlerFunc {
 			Repaired:      output.Repaired,
 			Matches:       output.Result.Matches,
 			AddedObjects:  output.Result.AddedObjects,
-		})
+		}
+		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if err := json.NewEncoder(writer).Encode(response); err != nil {
+			return
+		}
 	}
 }
 
-func validateVisionHeaders(request *http.Request) error {
-	if request.Header.Get("X-Schema-Version") != "1.0" {
-		return fmt.Errorf("X-Schema-Versionは1.0が必要です")
+func validateCompareHeaders(request *http.Request) error {
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/form-data" {
+		return fmt.Errorf("unsupported media type")
 	}
-	if strings.TrimSpace(request.Header.Get("X-Client-Version")) == "" {
-		return fmt.Errorf("X-Client-Versionが必要です")
-	}
-	if strings.TrimSpace(request.Header.Get("Idempotency-Key")) == "" {
-		return fmt.Errorf("Idempotency-Keyが必要です")
-	}
-	mediaType := request.Header.Get("Content-Type")
-	if !strings.HasPrefix(strings.ToLower(mediaType), "multipart/form-data") {
-		return fmt.Errorf("Content-Typeはmultipart/form-dataが必要です")
+	if request.Header.Get("X-Schema-Version") != "1.0" ||
+		strings.TrimSpace(request.Header.Get("X-Client-Version")) == "" ||
+		strings.TrimSpace(request.Header.Get("Idempotency-Key")) == "" {
+		return fmt.Errorf("required contract header is missing")
 	}
 	return nil
 }
@@ -118,56 +120,38 @@ func validateVisionHeaders(request *http.Request) error {
 func decodeConfirmedObjects(raw string) (baseline.Result, error) {
 	var result baseline.Result
 	if strings.TrimSpace(raw) == "" {
-		return result, fmt.Errorf("confirmedObjectsが必要です")
+		return result, fmt.Errorf("confirmedObjects is required")
 	}
-	decoder := json.NewDecoder(bytes.NewBufferString(raw))
+	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
-		return result, fmt.Errorf("confirmedObjectsが不正です")
+		return result, fmt.Errorf("decode confirmedObjects: %w", err)
 	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return result, fmt.Errorf("confirmedObjectsは単一JSONである必要があります")
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return result, fmt.Errorf("confirmedObjects has trailing content")
 	}
 	if err := baseline.Validate(result); err != nil {
-		return result, fmt.Errorf("confirmedObjectsが契約を満たしません")
+		return result, fmt.Errorf("validate confirmedObjects: %w", err)
 	}
 	return result, nil
 }
 
-func readJPEG(request *http.Request, field string) ([]byte, error) {
+func readCompareJPEG(request *http.Request, field string) ([]byte, int, *apierror.Error) {
 	file, header, err := request.FormFile(field)
 	if err != nil {
-		return nil, fmt.Errorf("%sが必要です", field)
+		return nil, http.StatusBadRequest, &invalidRequest
 	}
 	defer file.Close()
-	if !isJPEG(header) {
-		return nil, fmt.Errorf("%sはimage/jpegが必要です", field)
+	if header.Header.Get("Content-Type") != "image/jpeg" {
+		return nil, http.StatusUnsupportedMediaType, &unsupportedMedia
 	}
 	data, err := io.ReadAll(io.LimitReader(file, MaxImageBytes+1))
-	if err != nil {
-		return nil, fmt.Errorf("%sを読み取れません", field)
+	if err != nil || len(data) == 0 {
+		return nil, http.StatusBadRequest, &invalidRequest
 	}
-	if len(data) == 0 {
-		return nil, fmt.Errorf("%sが空です", field)
+	if int64(len(data)) > MaxImageBytes {
+		return nil, http.StatusRequestEntityTooLarge, &payloadTooLarge
 	}
-	if len(data) > MaxImageBytes {
-		return nil, fmt.Errorf("%sが2MBを超えています", field)
-	}
-	return data, nil
-}
-
-func isJPEG(header *multipart.FileHeader) bool {
-	return strings.EqualFold(header.Header.Get("Content-Type"), "image/jpeg")
-}
-
-func writeUploadError(response http.ResponseWriter, err error) {
-	if strings.Contains(err.Error(), "2MB") {
-		writeError(response, http.StatusRequestEntityTooLarge, payloadTooLarge, err.Error())
-		return
-	}
-	if strings.Contains(err.Error(), "image/jpeg") {
-		writeError(response, http.StatusUnsupportedMediaType, unsupportedMedia, err.Error())
-		return
-	}
-	writeError(response, http.StatusBadRequest, invalidRequest, err.Error())
+	return data, 0, nil
 }
