@@ -1,1 +1,1 @@
-{"schemaVersion":"1.0","status":"ok","modelId":"fixture-model","promptVersion":"verify-v1","objects":[{"sceneObjectId":"obj_01","result":"verified","confidence":0.95,"reasonCodes":[]}],"overall":"verified"}
+{"schemaVersion":"1.0","status":"ok","modelId":"fixture-model","promptVersion":"verify-v1","repaired":false,"verificationStatus":"verified","corrections":[],"uncertaintyReason":""}
