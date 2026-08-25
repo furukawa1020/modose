@@ -1,1 +1,15 @@
-{"schemaVersion":"0.9","status":"ok","modelId":"fixture-model","promptVersion":"compare-v0","matches":[{"sceneObjectId":"obj_01","state":"missing","currentBoundingBox":null,"sameObjectConfidence":0.9,"orientationDeltaDegrees":null,"occludedBy":null,"reasonCodes":["OBJECT_MISSING"]}],"extraObjects":[]}
+{
+  "schemaVersion": "0.9",
+  "status": "ok",
+  "modelId": "fixture-model",
+  "promptVersion": "compare-v1",
+  "repaired": false,
+  "matches": [{
+    "baselineObjectId": "wallet",
+    "state": "missing",
+    "confidence": 0.9,
+    "currentBox": null,
+    "ambiguityReason": ""
+  }],
+  "addedObjects": []
+}
