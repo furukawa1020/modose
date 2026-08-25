@@ -81,7 +81,11 @@ func TestVerifyPreservesNeedsCorrection(t *testing.T) {
 
 func TestVerifyReportsSuccessfulRepair(t *testing.T) {
 	generator := &fakeGenerator{responses: []vertex.GenerateResponse{
-		{Text: `{"status":"verified"}`, ResponseID: "initial"},
+		{Text: `{
+			"status":"verified",
+			"corrections":[{"baselineObjectId":"wallet","reason":"位置がずれている"}],
+			"uncertaintyReason":""
+		}`, ResponseID: "initial"},
 		{Text: verifiedJSON(), ResponseID: "repair"},
 	}}
 
