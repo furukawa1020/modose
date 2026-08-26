@@ -330,18 +330,65 @@ components:
     SceneMetadata:
       type: object
       additionalProperties: false
-      required: [sceneId, result, objectCount, schemaVersion]
+      required:
+        - sceneId
+        - createdAt
+        - completedAt
+        - objectCount
+        - result
+        - baselineLatencyMs
+        - compareLatencyMs
+        - verifyLatencyMs
+        - modelId
+        - promptVersion
+        - retryCount
+        - appVersion
+        - schemaVersion
       properties:
         sceneId:
           type: string
           format: uuid
-        result:
+        createdAt:
           type: string
-          enum: [verified, needs_correction, uncertain]
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
         objectCount:
           type: integer
           minimum: 1
           maximum: 5
+        result:
+          type: string
+          enum: [verified, needs_correction, uncertain]
+        baselineLatencyMs:
+          type: integer
+          format: int64
+          minimum: 0
+        compareLatencyMs:
+          type: integer
+          format: int64
+          minimum: 0
+        verifyLatencyMs:
+          type: integer
+          format: int64
+          minimum: 0
+        modelId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        promptVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+        retryCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        appVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
         schemaVersion:
           type: string
           const: '1.0'
