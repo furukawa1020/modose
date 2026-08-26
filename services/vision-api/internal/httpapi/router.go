@@ -45,6 +45,7 @@ func NewVisionRouter(probe ReadinessProbe, analyzers VisionAnalyzers) *Router {
 	router.mux.HandleFunc("/v1/vision/compare", postOnly(compareHandler(analyzers.Compare)))
 	router.mux.HandleFunc("/v1/vision/verify", postOnly(verifyHandler(analyzers.Verify)))
 	router.mux.HandleFunc("/v1/scenes/metadata", postOnly(storeMetadataHandler(analyzers.Metadata)))
+	router.mux.HandleFunc("/v1/scenes", notFound)
 	router.mux.HandleFunc("/v1/scenes/", methodOnly(http.MethodDelete, deleteMetadataHandler(analyzers.Metadata)))
 	return router
 }
@@ -52,10 +53,14 @@ func NewVisionRouter(probe ReadinessProbe, analyzers VisionAnalyzers) *Router {
 func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	handler, pattern := router.mux.Handler(request)
 	if pattern == "" {
-		apierror.Write(writer, http.StatusNotFound, apierror.NotFound)
+		notFound(writer, request)
 		return
 	}
 	handler.ServeHTTP(writer, request)
+}
+
+func notFound(writer http.ResponseWriter, _ *http.Request) {
+	apierror.Write(writer, http.StatusNotFound, apierror.NotFound)
 }
 
 func getOnly(next http.HandlerFunc) http.HandlerFunc {
