@@ -7,9 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	firebase "firebase.google.com/go/v4"
+
 	"github.com/furukawa1020/modose/services/vision-api/internal/baselineapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/compareapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/config"
+	"github.com/furukawa1020/modose/services/vision-api/internal/firebaseidentity"
 	"github.com/furukawa1020/modose/services/vision-api/internal/firestoremetadata"
 	"github.com/furukawa1020/modose/services/vision-api/internal/httpapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/metadataapi"
@@ -38,6 +41,18 @@ func main() {
 	)
 	defer stop()
 
+	firebaseApp, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: vertexConfig.Project})
+	if err != nil {
+		log.Printf("Firebase application initialization failed: %v", err)
+		os.Exit(2)
+	}
+	authClient, err := firebaseApp.Auth(ctx)
+	if err != nil {
+		log.Printf("Firebase Auth client initialization failed: %v", err)
+		os.Exit(2)
+	}
+	idTokenVerifier := firebaseidentity.New(authClient)
+
 	vertexClient, err := vertex.NewClient(ctx, vertexConfig)
 	if err != nil {
 		log.Printf("Vertex client initialization failed: %v", err)
@@ -62,10 +77,11 @@ func main() {
 	router := httpapi.NewVisionRouter(
 		httpapi.ReadinessProbeFunc(func(context.Context) error { return nil }),
 		httpapi.VisionAnalyzers{
-			Baseline: baselineService,
-			Compare:  compareService,
-			Verify:   verifyService,
-			Metadata: metadataService,
+			Baseline:        baselineService,
+			Compare:         compareService,
+			Verify:          verifyService,
+			Metadata:        metadataService,
+			IDTokenVerifier: idTokenVerifier,
 		},
 	)
 	if err := server.Run(ctx, serviceConfig, router); err != nil {
