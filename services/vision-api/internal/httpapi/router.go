@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/furukawa1020/modose/services/vision-api/internal/apierror"
+	"github.com/furukawa1020/modose/services/vision-api/internal/identity"
 )
 
 type ReadinessProbe interface {
@@ -19,10 +20,11 @@ func (function ReadinessProbeFunc) Ready(ctx context.Context) error {
 }
 
 type VisionAnalyzers struct {
-	Baseline BaselineAnalyzer
-	Compare  CompareAnalyzer
-	Verify   VerifyAnalyzer
-	Metadata MetadataService
+	Baseline        BaselineAnalyzer
+	Compare         CompareAnalyzer
+	Verify          VerifyAnalyzer
+	Metadata        MetadataService
+	IDTokenVerifier identity.IDTokenVerifier
 }
 
 type Router struct {
@@ -41,12 +43,30 @@ func NewVisionRouter(probe ReadinessProbe, analyzers VisionAnalyzers) *Router {
 	router := &Router{mux: http.NewServeMux()}
 	router.mux.HandleFunc("/healthz", getOnly(health))
 	router.mux.HandleFunc("/readyz", getOnly(readiness(probe)))
-	router.mux.HandleFunc("/v1/vision/baseline", postOnly(baselineHandler(analyzers.Baseline)))
-	router.mux.HandleFunc("/v1/vision/compare", postOnly(compareHandler(analyzers.Compare)))
-	router.mux.HandleFunc("/v1/vision/verify", postOnly(verifyHandler(analyzers.Verify)))
-	router.mux.HandleFunc("/v1/scenes/metadata", postOnly(storeMetadataHandler(analyzers.Metadata)))
+	router.mux.HandleFunc(
+		"/v1/vision/baseline",
+		postOnly(authenticated(analyzers.IDTokenVerifier, baselineHandler(analyzers.Baseline))),
+	)
+	router.mux.HandleFunc(
+		"/v1/vision/compare",
+		postOnly(authenticated(analyzers.IDTokenVerifier, compareHandler(analyzers.Compare))),
+	)
+	router.mux.HandleFunc(
+		"/v1/vision/verify",
+		postOnly(authenticated(analyzers.IDTokenVerifier, verifyHandler(analyzers.Verify))),
+	)
+	router.mux.HandleFunc(
+		"/v1/scenes/metadata",
+		postOnly(authenticated(analyzers.IDTokenVerifier, storeMetadataHandler(analyzers.Metadata))),
+	)
 	router.mux.HandleFunc("/v1/scenes", notFound)
-	router.mux.HandleFunc("/v1/scenes/", methodOnly(http.MethodDelete, deleteMetadataHandler(analyzers.Metadata)))
+	router.mux.HandleFunc(
+		"/v1/scenes/",
+		methodOnly(
+			http.MethodDelete,
+			authenticated(analyzers.IDTokenVerifier, deleteMetadataHandler(analyzers.Metadata)),
+		),
+	)
 	return router
 }
 
@@ -61,6 +81,16 @@ func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 
 func notFound(writer http.ResponseWriter, _ *http.Request) {
 	apierror.Write(writer, http.StatusNotFound, apierror.NotFound)
+}
+
+func authenticated(
+	verifier identity.IDTokenVerifier,
+	next http.HandlerFunc,
+) http.HandlerFunc {
+	if verifier == nil {
+		return next
+	}
+	return requireIDToken(verifier, next).ServeHTTP
 }
 
 func getOnly(next http.HandlerFunc) http.HandlerFunc {
