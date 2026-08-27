@@ -87,6 +87,9 @@ func authenticated(
 	verifier identity.IDTokenVerifier,
 	next http.HandlerFunc,
 ) http.HandlerFunc {
+	if verifier == nil {
+		return next
+	}
 	return requireIDToken(verifier, next).ServeHTTP
 }
 
