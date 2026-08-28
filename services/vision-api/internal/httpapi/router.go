@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/furukawa1020/modose/services/vision-api/internal/apierror"
+	"github.com/furukawa1020/modose/services/vision-api/internal/appidentity"
 	"github.com/furukawa1020/modose/services/vision-api/internal/identity"
 )
 
@@ -20,11 +21,12 @@ func (function ReadinessProbeFunc) Ready(ctx context.Context) error {
 }
 
 type VisionAnalyzers struct {
-	Baseline        BaselineAnalyzer
-	Compare         CompareAnalyzer
-	Verify          VerifyAnalyzer
-	Metadata        MetadataService
-	IDTokenVerifier identity.IDTokenVerifier
+	Baseline         BaselineAnalyzer
+	Compare          CompareAnalyzer
+	Verify           VerifyAnalyzer
+	Metadata         MetadataService
+	IDTokenVerifier  identity.IDTokenVerifier
+	AppCheckVerifier appidentity.TokenVerifier
 }
 
 type Router struct {
@@ -45,26 +47,26 @@ func NewVisionRouter(probe ReadinessProbe, analyzers VisionAnalyzers) *Router {
 	router.mux.HandleFunc("/readyz", getOnly(readiness(probe)))
 	router.mux.HandleFunc(
 		"/v1/vision/baseline",
-		postOnly(authenticated(analyzers.IDTokenVerifier, baselineHandler(analyzers.Baseline))),
+		postOnly(authenticated(analyzers, baselineHandler(analyzers.Baseline))),
 	)
 	router.mux.HandleFunc(
 		"/v1/vision/compare",
-		postOnly(authenticated(analyzers.IDTokenVerifier, compareHandler(analyzers.Compare))),
+		postOnly(authenticated(analyzers, compareHandler(analyzers.Compare))),
 	)
 	router.mux.HandleFunc(
 		"/v1/vision/verify",
-		postOnly(authenticated(analyzers.IDTokenVerifier, verifyHandler(analyzers.Verify))),
+		postOnly(authenticated(analyzers, verifyHandler(analyzers.Verify))),
 	)
 	router.mux.HandleFunc(
 		"/v1/scenes/metadata",
-		postOnly(authenticated(analyzers.IDTokenVerifier, storeMetadataHandler(analyzers.Metadata))),
+		postOnly(authenticated(analyzers, storeMetadataHandler(analyzers.Metadata))),
 	)
 	router.mux.HandleFunc("/v1/scenes", notFound)
 	router.mux.HandleFunc(
 		"/v1/scenes/",
 		methodOnly(
 			http.MethodDelete,
-			authenticated(analyzers.IDTokenVerifier, deleteMetadataHandler(analyzers.Metadata)),
+			authenticated(analyzers, deleteMetadataHandler(analyzers.Metadata)),
 		),
 	)
 	return router
@@ -84,13 +86,17 @@ func notFound(writer http.ResponseWriter, _ *http.Request) {
 }
 
 func authenticated(
-	verifier identity.IDTokenVerifier,
+	analyzers VisionAnalyzers,
 	next http.HandlerFunc,
 ) http.HandlerFunc {
-	if verifier == nil {
+	if analyzers.IDTokenVerifier == nil && analyzers.AppCheckVerifier == nil {
 		return next
 	}
-	return requireIDToken(verifier, next).ServeHTTP
+	return requireFirebaseRequest(
+		analyzers.IDTokenVerifier,
+		analyzers.AppCheckVerifier,
+		next,
+	).ServeHTTP
 }
 
 func getOnly(next http.HandlerFunc) http.HandlerFunc {
