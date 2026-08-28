@@ -12,6 +12,7 @@ import (
 	"github.com/furukawa1020/modose/services/vision-api/internal/baselineapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/compareapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/config"
+	"github.com/furukawa1020/modose/services/vision-api/internal/firebaseappcheck"
 	"github.com/furukawa1020/modose/services/vision-api/internal/firebaseidentity"
 	"github.com/furukawa1020/modose/services/vision-api/internal/firestoremetadata"
 	"github.com/furukawa1020/modose/services/vision-api/internal/httpapi"
@@ -51,7 +52,13 @@ func main() {
 		log.Printf("Firebase Auth client initialization failed: %v", err)
 		os.Exit(2)
 	}
+	appCheckClient, err := firebaseApp.AppCheck(ctx)
+	if err != nil {
+		log.Printf("Firebase App Check client initialization failed: %v", err)
+		os.Exit(2)
+	}
 	idTokenVerifier := firebaseidentity.New(authClient)
+	appCheckVerifier := firebaseappcheck.New(appCheckClient)
 
 	vertexClient, err := vertex.NewClient(ctx, vertexConfig)
 	if err != nil {
@@ -77,11 +84,12 @@ func main() {
 	router := httpapi.NewVisionRouter(
 		httpapi.ReadinessProbeFunc(func(context.Context) error { return nil }),
 		httpapi.VisionAnalyzers{
-			Baseline:        baselineService,
-			Compare:         compareService,
-			Verify:          verifyService,
-			Metadata:        metadataService,
-			IDTokenVerifier: idTokenVerifier,
+			Baseline:         baselineService,
+			Compare:          compareService,
+			Verify:           verifyService,
+			Metadata:         metadataService,
+			IDTokenVerifier:  idTokenVerifier,
+			AppCheckVerifier: appCheckVerifier,
 		},
 	)
 	if err := server.Run(ctx, serviceConfig, router); err != nil {
