@@ -192,9 +192,9 @@ func (sink *Sink) timeSeries(
 		series = append(series, sink.series(
 			latencyMetricType,
 			map[string]string{"operation": string(operation)},
-			&monitoringpb.TypedValue_DoubleValue{
+			&monitoringpb.TypedValue{Value: &monitoringpb.TypedValue_DoubleValue{
 				DoubleValue: float64(bucket.sum) / float64(bucket.count),
-			},
+			}},
 			at,
 		))
 	}
@@ -205,7 +205,9 @@ func (sink *Sink) timeSeries(
 				"operation":  string(key.operation),
 				"error_code": key.code,
 			},
-			&monitoringpb.TypedValue_Int64Value{Int64Value: count},
+			&monitoringpb.TypedValue{Value: &monitoringpb.TypedValue_Int64Value{
+				Int64Value: count,
+			}},
 			at,
 		))
 	}
@@ -215,7 +217,7 @@ func (sink *Sink) timeSeries(
 func (sink *Sink) series(
 	metricType string,
 	labels map[string]string,
-	value monitoringpb.IsTypedValue_Value,
+	value *monitoringpb.TypedValue,
 	at time.Time,
 ) *monitoringpb.TimeSeries {
 	return &monitoringpb.TimeSeries{
@@ -225,7 +227,7 @@ func (sink *Sink) series(
 		},
 		Points: []*monitoringpb.Point{{
 			Interval: &monitoringpb.TimeInterval{EndTime: timestamppb.New(at)},
-			Value:    &monitoringpb.TypedValue{Value: value},
+			Value:    value,
 		}},
 	}
 }
