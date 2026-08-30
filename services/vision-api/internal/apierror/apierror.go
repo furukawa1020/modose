@@ -21,7 +21,14 @@ type envelope struct {
 	Error Error `json:"error"`
 }
 
+type publicErrorObserver interface {
+	ObservePublicError(string)
+}
+
 func Write(writer http.ResponseWriter, status int, public Error) {
+	if observer, ok := writer.(publicErrorObserver); ok {
+		observer.ObservePublicError(public.Code)
+	}
 	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	writer.WriteHeader(status)
 	if err := json.NewEncoder(writer).Encode(envelope{Error: public}); err != nil {
