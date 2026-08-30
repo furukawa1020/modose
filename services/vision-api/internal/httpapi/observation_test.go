@@ -30,7 +30,16 @@ func TestObserveRequestRecordsOnlySafePublicFields(t *testing.T) {
 	recorder := &observationRecorderStub{}
 	clock := sequenceClock(
 		time.Date(2026, 8, 30, 1, 0, 0, 0, time.UTC),
-		time.Date(2026, 8, 30, 1, 0, 0, 125*time.Millisecond, time.UTC),
+		time.Date(
+			2026,
+			8,
+			30,
+			1,
+			0,
+			0,
+			int(125*time.Millisecond),
+			time.UTC,
+		),
 	)
 	handler := observeRequest(
 		observability.OperationBaseline,
