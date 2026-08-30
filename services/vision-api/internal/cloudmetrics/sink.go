@@ -65,7 +65,12 @@ func New(
 	if client == nil {
 		return nil, cloudError("client_required", nil)
 	}
-	return newSink(project, client.CreateTimeSeries, time.Now)
+	return newSink(project, func(
+		ctx context.Context,
+		request *monitoringpb.CreateTimeSeriesRequest,
+	) error {
+		return client.CreateTimeSeries(ctx, request)
+	}, time.Now)
 }
 
 func (sink *Sink) ObserveLatency(
