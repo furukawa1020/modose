@@ -8,6 +8,7 @@ import (
 	"github.com/furukawa1020/modose/services/vision-api/internal/apierror"
 	"github.com/furukawa1020/modose/services/vision-api/internal/appidentity"
 	"github.com/furukawa1020/modose/services/vision-api/internal/identity"
+	"github.com/furukawa1020/modose/services/vision-api/internal/observability"
 )
 
 type ReadinessProbe interface {
@@ -27,6 +28,7 @@ type VisionAnalyzers struct {
 	Metadata         MetadataService
 	IDTokenVerifier  identity.IDTokenVerifier
 	AppCheckVerifier appidentity.TokenVerifier
+	Observation      ObservationConfig
 }
 
 type Router struct {
@@ -47,26 +49,54 @@ func NewVisionRouter(probe ReadinessProbe, analyzers VisionAnalyzers) *Router {
 	router.mux.HandleFunc("/readyz", getOnly(readiness(probe)))
 	router.mux.HandleFunc(
 		"/v1/vision/baseline",
-		postOnly(authenticated(analyzers, baselineHandler(analyzers.Baseline))),
+		observed(
+			analyzers.Observation,
+			observability.OperationBaseline,
+			postOnly(authenticated(analyzers, baselineHandler(analyzers.Baseline))),
+		),
 	)
 	router.mux.HandleFunc(
 		"/v1/vision/compare",
-		postOnly(authenticated(analyzers, compareHandler(analyzers.Compare))),
+		observed(
+			analyzers.Observation,
+			observability.OperationCompare,
+			postOnly(authenticated(analyzers, compareHandler(analyzers.Compare))),
+		),
 	)
 	router.mux.HandleFunc(
 		"/v1/vision/verify",
-		postOnly(authenticated(analyzers, verifyHandler(analyzers.Verify))),
+		observed(
+			analyzers.Observation,
+			observability.OperationVerify,
+			postOnly(authenticated(analyzers, verifyHandler(analyzers.Verify))),
+		),
 	)
 	router.mux.HandleFunc(
 		"/v1/scenes/metadata",
-		postOnly(authenticated(analyzers, storeMetadataHandler(analyzers.Metadata))),
+		observed(
+			analyzers.Observation,
+			observability.OperationMetadataStore,
+			postOnly(
+				authenticated(
+					analyzers,
+					storeMetadataHandler(analyzers.Metadata),
+				),
+			),
+		),
 	)
 	router.mux.HandleFunc("/v1/scenes", notFound)
 	router.mux.HandleFunc(
 		"/v1/scenes/",
-		methodOnly(
-			http.MethodDelete,
-			authenticated(analyzers, deleteMetadataHandler(analyzers.Metadata)),
+		observed(
+			analyzers.Observation,
+			observability.OperationMetadataDelete,
+			methodOnly(
+				http.MethodDelete,
+				authenticated(
+					analyzers,
+					deleteMetadataHandler(analyzers.Metadata),
+				),
+			),
 		),
 	)
 	return router
@@ -97,6 +127,14 @@ func authenticated(
 		analyzers.AppCheckVerifier,
 		next,
 	).ServeHTTP
+}
+
+func observed(
+	config ObservationConfig,
+	operation observability.Operation,
+	next http.HandlerFunc,
+) http.HandlerFunc {
+	return observeRequest(operation, config, next).ServeHTTP
 }
 
 func getOnly(next http.HandlerFunc) http.HandlerFunc {
