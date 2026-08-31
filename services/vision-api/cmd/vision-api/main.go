@@ -27,7 +27,11 @@ import (
 	"github.com/furukawa1020/modose/services/vision-api/internal/vertex"
 )
 
-const finalMetricFlushDeadline = 5 * time.Second
+const (
+	metricFlushInterval     = 10 * time.Second
+	metricFlushDeadline     = 5 * time.Second
+	finalMetricFlushDeadline = 5 * time.Second
+)
 
 func main() {
 	serviceConfig, err := config.Load(os.LookupEnv)
@@ -132,8 +136,29 @@ func main() {
 			},
 		},
 	)
-	if err := server.Run(ctx, serviceConfig, router); err != nil {
-		log.Printf("vision service stopped with error: %v", err)
+
+	metricFlushContext, stopMetricFlush := context.WithCancel(ctx)
+	metricFlushDone := make(chan struct{})
+	go func() {
+		defer close(metricFlushDone)
+		if err := cloudmetrics.RunPeriodic(
+			metricFlushContext,
+			metricSink,
+			metricFlushInterval,
+			metricFlushDeadline,
+			func(err error) {
+				log.Printf("Cloud Monitoring periodic flush failed: %v", err)
+			},
+		); err != nil {
+			log.Printf("Cloud Monitoring periodic flush stopped: %v", err)
+		}
+	}()
+
+	runErr := server.Run(ctx, serviceConfig, router)
+	stopMetricFlush()
+	<-metricFlushDone
+	if runErr != nil {
+		log.Printf("vision service stopped with error: %v", runErr)
 		os.Exit(1)
 	}
 }
