@@ -6,10 +6,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	monitoring "cloud.google.com/go/monitoring/apiv3"
 	firebase "firebase.google.com/go/v4"
 
 	"github.com/furukawa1020/modose/services/vision-api/internal/baselineapi"
+	"github.com/furukawa1020/modose/services/vision-api/internal/cloudmetrics"
 	"github.com/furukawa1020/modose/services/vision-api/internal/compareapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/config"
 	"github.com/furukawa1020/modose/services/vision-api/internal/firebaseappcheck"
@@ -17,11 +20,14 @@ import (
 	"github.com/furukawa1020/modose/services/vision-api/internal/firestoremetadata"
 	"github.com/furukawa1020/modose/services/vision-api/internal/httpapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/metadataapi"
+	"github.com/furukawa1020/modose/services/vision-api/internal/observability"
 	"github.com/furukawa1020/modose/services/vision-api/internal/scenemetadata"
 	"github.com/furukawa1020/modose/services/vision-api/internal/server"
 	"github.com/furukawa1020/modose/services/vision-api/internal/verifyapi"
 	"github.com/furukawa1020/modose/services/vision-api/internal/vertex"
 )
+
+const finalMetricFlushDeadline = 5 * time.Second
 
 func main() {
 	serviceConfig, err := config.Load(os.LookupEnv)
@@ -41,6 +47,36 @@ func main() {
 		syscall.SIGTERM,
 	)
 	defer stop()
+
+	monitoringClient, err := monitoring.NewMetricClient(ctx)
+	if err != nil {
+		log.Printf("Cloud Monitoring client initialization failed: %v", err)
+		os.Exit(2)
+	}
+	defer func() {
+		if err := monitoringClient.Close(); err != nil {
+			log.Printf("Cloud Monitoring client close failed: %v", err)
+		}
+	}()
+	metricSink, err := cloudmetrics.New(monitoringClient, vertexConfig.Project)
+	if err != nil {
+		log.Printf("Cloud Monitoring sink initialization failed: %v", err)
+		os.Exit(2)
+	}
+	defer func() {
+		flushContext, cancel := context.WithTimeout(
+			context.Background(),
+			finalMetricFlushDeadline,
+		)
+		defer cancel()
+		if err := metricSink.Flush(flushContext); err != nil {
+			log.Printf("Cloud Monitoring final flush failed: %v", err)
+		}
+	}()
+	observationRecorder := observability.NewMultiRecorder(
+		observability.NewJSONLogger(os.Stdout),
+		observability.NewMetricsRecorder(metricSink),
+	)
 
 	firebaseApp, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: vertexConfig.Project})
 	if err != nil {
@@ -90,6 +126,10 @@ func main() {
 			Metadata:         metadataService,
 			IDTokenVerifier:  idTokenVerifier,
 			AppCheckVerifier: appCheckVerifier,
+			Observation: httpapi.ObservationConfig{
+				Recorder: observationRecorder,
+				ModelID:  vertexConfig.ModelID,
+			},
 		},
 	)
 	if err := server.Run(ctx, serviceConfig, router); err != nil {
