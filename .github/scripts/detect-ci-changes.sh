@@ -6,6 +6,7 @@ android=false
 rust=false
 go=false
 contract=false
+container=false
 
 while IFS= read -r -d '' file; do
   case "$file" in
@@ -14,6 +15,7 @@ while IFS= read -r -d '' file; do
       rust=true
       go=true
       contract=true
+      container=true
       ;;
     .java-version|apps/android/*)
       android=true
@@ -21,8 +23,12 @@ while IFS= read -r -d '' file; do
     Cargo.toml|Cargo.lock|rust-toolchain.toml|crates/*)
       rust=true
       ;;
-    go.work|services/vision-api/*)
+    go.work)
       go=true
+      ;;
+    .dockerignore|services/vision-api/*)
+      go=true
+      container=true
       ;;
     .github/scripts/lint-openapi.sh|api/*|fixtures/*)
       contract=true
@@ -34,3 +40,4 @@ printf 'android=%s\n' "$android"
 printf 'rust=%s\n' "$rust"
 printf 'go=%s\n' "$go"
 printf 'contract=%s\n' "$contract"
+printf 'container=%s\n' "$container"
