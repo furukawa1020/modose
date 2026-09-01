@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   publish:
-    name: Publish ${{ inputs.target_environment }} image
+    name: Deploy ${{ inputs.target_environment }} Vision API
     runs-on: ubuntu-latest
     environment: ${{ inputs.target_environment }}
     env:
@@ -35,7 +35,7 @@ jobs:
     outputs:
       image: ${{ steps.image.outputs.image }}
       digest: ${{ steps.image.outputs.digest }}
-      service_url: ${{ steps.staging.outputs.service_url }}
+      service_url: ${{ steps.deploy.outputs.service_url }}
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -91,14 +91,15 @@ jobs:
             "$repository/vision-api" \
             "$digest" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy staging revision
-        if: inputs.target_environment == 'staging'
-        id: staging
+      - name: Deploy selected environment revision
+        id: deploy
         shell: bash
         env:
+          APP_ENV: ${{ inputs.target_environment }}
           IMAGE_BY_DIGEST: ${{ steps.image.outputs.image }}
         run: |
           set -euo pipefail
+          [[ "$APP_ENV" =~ ^(staging|production)$ ]]
           [[ "$IMAGE_BY_DIGEST" =~ @sha256:[a-f0-9]{64}$ ]]
 
           gcloud run deploy "$CLOUD_RUN_SERVICE" \
@@ -114,7 +115,7 @@ jobs:
             --min-instances 0 \
             --max-instances 10 \
             --no-allow-unauthenticated \
-            --set-env-vars "APP_ENV=staging,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID,GOOGLE_CLOUD_LOCATION=$GCP_REGION,VLM_MODEL_ID=$VLM_MODEL_ID" \
+            --set-env-vars "APP_ENV=$APP_ENV,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID,GOOGLE_CLOUD_LOCATION=$GCP_REGION,VLM_MODEL_ID=$VLM_MODEL_ID" \
             --quiet
 
           service_url="$(
