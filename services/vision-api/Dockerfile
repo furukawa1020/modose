@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1.7
+
+FROM golang:1.25.5-bookworm AS build
+
+WORKDIR /src/services/vision-api
+
+COPY services/vision-api/go.mod ./
+RUN go mod download
+
+COPY services/vision-api/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o /out/vision-api \
+    ./cmd/vision-api
+
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+
+COPY --from=build --chown=nonroot:nonroot /out/vision-api /vision-api
+
+USER nonroot:nonroot
+EXPOSE 8080
+
+ENTRYPOINT ["/vision-api"]
