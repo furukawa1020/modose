@@ -1,0 +1,59 @@
+name: Cloud identity preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: GitHub Environment to authenticate against
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cloud-identity-preflight-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+jobs:
+  identity:
+    name: Verify ${{ inputs.target_environment }} identity
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target_environment }}
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+      DEPLOY_SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+    steps:
+      - name: Require environment identity configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GCP_PROJECT_ID"
+          test -n "$WIF_PROVIDER"
+          test -n "$DEPLOY_SERVICE_ACCOUNT"
+
+      - name: Authenticate with Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          cleanup_credentials: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Verify short-lived identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          account="$(gcloud config get-value account 2>/dev/null)"
+          test "$account" = "$DEPLOY_SERVICE_ACCOUNT"
+          gcloud auth print-access-token >/dev/null
