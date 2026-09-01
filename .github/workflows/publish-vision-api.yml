@@ -35,6 +35,7 @@ jobs:
     outputs:
       image: ${{ steps.image.outputs.image }}
       digest: ${{ steps.image.outputs.digest }}
+      revision: ${{ steps.deploy.outputs.revision }}
       service_url: ${{ steps.deploy.outputs.service_url }}
     steps:
       - name: Check out repository
@@ -124,5 +125,48 @@ jobs:
               --region "$GCP_REGION" \
               --format 'value(status.url)'
           )"
+          revision="$(
+            gcloud run services describe "$CLOUD_RUN_SERVICE" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --format 'value(status.latestReadyRevisionName)'
+          )"
           [[ "$service_url" =~ ^https:// ]]
+          [[ "$revision" =~ ^[a-z0-9-]+$ ]]
+
+          deployed_image="$(
+            gcloud run revisions describe "$revision" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --format 'value(spec.containers[0].image)'
+          )"
+          test "$deployed_image" = "$IMAGE_BY_DIGEST"
+
+          printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
           printf 'service_url=%s\n' "$service_url" >> "$GITHUB_OUTPUT"
+
+      - name: Record deployment evidence
+        shell: bash
+        env:
+          DEPLOYED_DIGEST: ${{ steps.image.outputs.digest }}
+          DEPLOYED_IMAGE: ${{ steps.image.outputs.image }}
+          DEPLOYED_REVISION: ${{ steps.deploy.outputs.revision }}
+          SERVICE_URL: ${{ steps.deploy.outputs.service_url }}
+          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Vision API deployment"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            printf '| Environment | `%s` |\n' "$TARGET_ENVIRONMENT"
+            printf '| Project | `%s` |\n' "$GCP_PROJECT_ID"
+            printf '| Region | `%s` |\n' "$GCP_REGION"
+            printf '| Service | `%s` |\n' "$CLOUD_RUN_SERVICE"
+            printf '| Revision | `%s` |\n' "$DEPLOYED_REVISION"
+            printf '| Digest | `%s` |\n' "$DEPLOYED_DIGEST"
+            printf '| Image | `%s` |\n' "$DEPLOYED_IMAGE"
+            printf '| Commit | `%s` |\n' "$GITHUB_SHA"
+            printf '| URL | %s |\n' "$SERVICE_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
