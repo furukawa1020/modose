@@ -1,0 +1,91 @@
+name: Publish Vision API image
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: GitHub Environment whose registry receives the image
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-vision-api-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.target_environment }} image
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target_environment }}
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      AR_REPOSITORY: ${{ vars.AR_REPOSITORY }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+      DEPLOY_SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+      VLM_MODEL_ID: ${{ vars.VLM_MODEL_ID }}
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate environment configuration
+        run: bash .github/scripts/validate-cloud-environment.sh
+
+      - name: Authenticate with Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          cleanup_credentials: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Artifact Registry authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker \
+            "$GCP_REGION-docker.pkg.dev" \
+            --quiet
+
+      - name: Build and push image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          repository="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPOSITORY"
+          tagged_image="$repository/vision-api:$GITHUB_SHA"
+
+          docker build \
+            --file services/vision-api/Dockerfile \
+            --tag "$tagged_image" \
+            .
+          docker push "$tagged_image"
+
+          digest="$(
+            gcloud artifacts docker images describe "$tagged_image" \
+              --project "$GCP_PROJECT_ID" \
+              --format 'value(image_summary.digest)'
+          )"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+          printf 'image=%s@%s\n' \
+            "$repository/vision-api" \
+            "$digest" >> "$GITHUB_OUTPUT"
