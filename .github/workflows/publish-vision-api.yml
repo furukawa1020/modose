@@ -31,6 +31,7 @@ jobs:
       CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
       WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
       DEPLOY_SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+      RUNTIME_SERVICE_ACCOUNT: ${{ vars.RUNTIME_SERVICE_ACCOUNT }}
       VLM_MODEL_ID: ${{ vars.VLM_MODEL_ID }}
     outputs:
       image: ${{ steps.image.outputs.image }}
@@ -107,6 +108,7 @@ jobs:
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "$IMAGE_BY_DIGEST" \
+            --service-account "$RUNTIME_SERVICE_ACCOUNT" \
             --platform managed \
             --port 8080 \
             --cpu 1 \
