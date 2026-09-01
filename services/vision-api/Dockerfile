@@ -5,7 +5,7 @@ FROM golang:1.25.5-bookworm AS build
 WORKDIR /src/services/vision-api
 
 COPY services/vision-api/go.mod ./
-RUN go mod download
+RUN go mod download all
 
 COPY services/vision-api/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build \
