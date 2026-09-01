@@ -148,6 +148,33 @@ jobs:
             exit 1
           fi
 
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: ${{ env.IMAGE }}
+          format: spdx-json
+          output-file: vision-api.spdx.json
+          artifact-name: vision-api-${{ github.sha }}.spdx.json
+          upload-artifact: true
+          upload-artifact-retention: 30
+          upload-release-assets: false
+          dependency-snapshot: false
+
+      - name: Validate SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          document = json.loads(Path("vision-api.spdx.json").read_text())
+          if not document.get("SPDXID"):
+              raise SystemExit("SBOM has no SPDXID")
+          if not document.get("packages"):
+              raise SystemExit("SBOM has no packages")
+          PY
+
   contract:
     name: Contract baseline
     needs: changes
