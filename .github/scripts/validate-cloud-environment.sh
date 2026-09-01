@@ -9,6 +9,7 @@ required=(
   CLOUD_RUN_SERVICE
   WIF_PROVIDER
   DEPLOY_SERVICE_ACCOUNT
+  RUNTIME_SERVICE_ACCOUNT
   VLM_MODEL_ID
 )
 
@@ -25,4 +26,6 @@ done
 [[ "$CLOUD_RUN_SERVICE" =~ ^[a-z][a-z0-9-]{0,62}$ ]]
 [[ "$WIF_PROVIDER" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[a-z0-9-]+/providers/[a-z0-9-]+$ ]]
 [[ "$DEPLOY_SERVICE_ACCOUNT" =~ ^[a-z0-9-]+@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$ ]]
+[[ "$RUNTIME_SERVICE_ACCOUNT" =~ ^[a-z0-9-]+@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$ ]]
+[[ "$DEPLOY_SERVICE_ACCOUNT" != "$RUNTIME_SERVICE_ACCOUNT" ]]
 [[ "$VLM_MODEL_ID" =~ ^[A-Za-z0-9._:/-]{1,128}$ ]]
