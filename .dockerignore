@@ -1,0 +1,7 @@
+**
+!services/
+!services/vision-api/
+!services/vision-api/**/
+!services/vision-api/**/*.go
+!services/vision-api/go.mod
+!services/vision-api/go.sum
