@@ -22,6 +22,7 @@ jobs:
       rust: ${{ steps.paths.outputs.rust }}
       go: ${{ steps.paths.outputs.go }}
       contract: ${{ steps.paths.outputs.contract }}
+      container: ${{ steps.paths.outputs.container }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -109,6 +110,44 @@ jobs:
       - name: Test Go module
         run: go -C services/vision-api test ./...
 
+  container:
+    name: Vision API container
+    needs: changes
+    if: needs.changes.outputs.container == 'true'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: modose-vision-api:ci-${{ github.sha }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build runtime image
+        run: |
+          docker build \
+            --file services/vision-api/Dockerfile \
+            --tag "$IMAGE" \
+            .
+
+      - name: Require non-root distroless runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          user="$(docker image inspect --format '{{.Config.User}}' "$IMAGE")"
+          test "$user" = "nonroot:nonroot"
+
+          healthcheck="$(
+            docker image inspect \
+              --format '{{json .Config.Healthcheck.Test}}' \
+              "$IMAGE"
+          )"
+          test "$healthcheck" = '["CMD","/healthcheck"]'
+
+          if docker run --rm --entrypoint /bin/sh "$IMAGE" -c true; then
+            echo "runtime image unexpectedly contains /bin/sh" >&2
+            exit 1
+          fi
+
   contract:
     name: Contract baseline
     needs: changes
@@ -147,6 +186,7 @@ jobs:
       - android
       - rust
       - go
+      - container
       - contract
     runs-on: ubuntu-latest
     env:
@@ -154,6 +194,7 @@ jobs:
       ANDROID_RESULT: ${{ needs.android.result }}
       RUST_RESULT: ${{ needs.rust.result }}
       GO_RESULT: ${{ needs.go.result }}
+      CONTAINER_RESULT: ${{ needs.container.result }}
       CONTRACT_RESULT: ${{ needs.contract.result }}
     steps:
       - name: Require successful applicable checks
@@ -165,6 +206,7 @@ jobs:
             "$ANDROID_RESULT" \
             "$RUST_RESULT" \
             "$GO_RESULT" \
+            "$CONTAINER_RESULT" \
             "$CONTRACT_RESULT"; do
             case "$result" in
               success|skipped) ;;
