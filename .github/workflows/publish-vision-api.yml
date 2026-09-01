@@ -1,10 +1,10 @@
-name: Publish Vision API image
+name: Publish and deploy Vision API
 
 on:
   workflow_dispatch:
     inputs:
       target_environment:
-        description: GitHub Environment whose registry receives the image
+        description: GitHub Environment receiving the image
         required: true
         type: choice
         options:
@@ -16,7 +16,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: publish-vision-api-${{ inputs.target_environment }}
+  group: deploy-vision-api-${{ inputs.target_environment }}
   cancel-in-progress: false
 
 jobs:
@@ -35,6 +35,7 @@ jobs:
     outputs:
       image: ${{ steps.image.outputs.image }}
       digest: ${{ steps.image.outputs.digest }}
+      service_url: ${{ steps.staging.outputs.service_url }}
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -89,3 +90,38 @@ jobs:
           printf 'image=%s@%s\n' \
             "$repository/vision-api" \
             "$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy staging revision
+        if: inputs.target_environment == 'staging'
+        id: staging
+        shell: bash
+        env:
+          IMAGE_BY_DIGEST: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_BY_DIGEST" =~ @sha256:[a-f0-9]{64}$ ]]
+
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "$IMAGE_BY_DIGEST" \
+            --platform managed \
+            --port 8080 \
+            --cpu 1 \
+            --memory 512Mi \
+            --concurrency 20 \
+            --timeout 60s \
+            --min-instances 0 \
+            --max-instances 10 \
+            --no-allow-unauthenticated \
+            --set-env-vars "APP_ENV=staging,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID,GOOGLE_CLOUD_LOCATION=$GCP_REGION,VLM_MODEL_ID=$VLM_MODEL_ID" \
+            --quiet
+
+          service_url="$(
+            gcloud run services describe "$CLOUD_RUN_SERVICE" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --format 'value(status.url)'
+          )"
+          [[ "$service_url" =~ ^https:// ]]
+          printf 'service_url=%s\n' "$service_url" >> "$GITHUB_OUTPUT"
