@@ -38,6 +38,7 @@ jobs:
       digest: ${{ steps.image.outputs.digest }}
       revision: ${{ steps.deploy.outputs.revision }}
       service_url: ${{ steps.deploy.outputs.service_url }}
+      candidate_url: ${{ steps.deploy.outputs.candidate_url }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,6 +100,7 @@ jobs:
         env:
           APP_ENV: ${{ inputs.target_environment }}
           IMAGE_BY_DIGEST: ${{ steps.image.outputs.image }}
+          CANDIDATE_TAG: candidate-${{ github.run_id }}
         run: |
           set -euo pipefail
           [[ "$APP_ENV" =~ ^(staging|production)$ ]]
@@ -118,22 +120,28 @@ jobs:
             --min-instances 0 \
             --max-instances 10 \
             --allow-unauthenticated \
+            --no-traffic \
+            --tag "$CANDIDATE_TAG" \
             --set-env-vars "APP_ENV=$APP_ENV,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID,GOOGLE_CLOUD_LOCATION=$GCP_REGION,VLM_MODEL_ID=$VLM_MODEL_ID" \
             --quiet
 
-          service_url="$(
+          service_json="$(
             gcloud run services describe "$CLOUD_RUN_SERVICE" \
               --project "$GCP_PROJECT_ID" \
               --region "$GCP_REGION" \
-              --format 'value(status.url)'
+              --format json
           )"
-          revision="$(
-            gcloud run services describe "$CLOUD_RUN_SERVICE" \
-              --project "$GCP_PROJECT_ID" \
-              --region "$GCP_REGION" \
-              --format 'value(status.latestReadyRevisionName)'
+          service_url="$(jq -er '.status.url' <<<"$service_json")"
+          revision="$(jq -er '.status.latestReadyRevisionName' <<<"$service_json")"
+          candidate_url="$(
+            jq -er --arg tag "$CANDIDATE_TAG" '
+              .status.traffic[]
+              | select(.tag == $tag)
+              | .url
+            ' <<<"$service_json"
           )"
           [[ "$service_url" =~ ^https:// ]]
+          [[ "$candidate_url" =~ ^https:// ]]
           [[ "$revision" =~ ^[a-z0-9-]+$ ]]
 
           deployed_image="$(
@@ -146,12 +154,20 @@ jobs:
 
           printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
           printf 'service_url=%s\n' "$service_url" >> "$GITHUB_OUTPUT"
+          printf 'candidate_url=%s\n' "$candidate_url" >> "$GITHUB_OUTPUT"
 
       - name: Verify deployed HTTP health
         shell: bash
         env:
-          SERVICE_URL: ${{ steps.deploy.outputs.service_url }}
+          SERVICE_URL: ${{ steps.deploy.outputs.candidate_url }}
         run: bash .github/scripts/smoke-cloud-run.sh
+
+      - name: Promote verified revision
+        shell: bash
+        env:
+          DEPLOYED_REVISION: ${{ steps.deploy.outputs.revision }}
+          CANDIDATE_TAG: candidate-${{ github.run_id }}
+        run: bash infra/cloud/promote-cloud-run-revision.sh
 
       - name: Record deployment evidence
         shell: bash
