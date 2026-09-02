@@ -41,7 +41,7 @@ class YuvLumaQualityAssessor {
         val lastIndex =
             (image.heightPx - 1).toLong() * plane.rowStride +
                 (image.widthPx - 1).toLong() * plane.pixelStride
-        if (lastIndex !in plane.bytes.indices.map(Int::toLong)) {
+        if (lastIndex < 0L || lastIndex >= plane.bytes.size.toLong()) {
             return ImageQualityAssessmentResult.Failed(
                 ImageQualityAssessmentFailure.InvalidLumaPlane,
             )
@@ -62,7 +62,6 @@ class YuvLumaQualityAssessor {
         }
 
         var laplacianCount = 0L
-        var laplacianSum = 0.0
         var laplacianSquareSum = 0.0
         for (y in 1 until image.heightPx - 1) {
             for (x in 1 until image.widthPx - 1) {
@@ -73,18 +72,13 @@ class YuvLumaQualityAssessor {
                         luminanceAt(image, x, y - 1) -
                         luminanceAt(image, x, y + 1)
                 laplacianCount += 1
-                laplacianSum += laplacian
                 laplacianSquareSum += laplacian * laplacian
             }
         }
 
-        val laplacianMean = laplacianSum / laplacianCount
-        val variance =
-            (laplacianSquareSum / laplacianCount) -
-                (laplacianMean * laplacianMean)
-        val nonNegativeVariance = variance.coerceAtLeast(0.0)
+        val laplacianEnergy = laplacianSquareSum / laplacianCount
         val blurScore =
-            nonNegativeVariance / (nonNegativeVariance + BLUR_NORMALIZATION)
+            laplacianEnergy / (laplacianEnergy + BLUR_NORMALIZATION)
 
         return ImageQualityAssessmentResult.Assessed(
             ImageQualityMetrics(
