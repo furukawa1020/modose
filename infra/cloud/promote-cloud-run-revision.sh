@@ -45,9 +45,9 @@ traffic_json="$(
 
 serving_revision="$(
   jq -er '
-    .status.traffic[]
-    | select(.percent == 100 and (.tag == null or .tag == ""))
-    | .revisionName
+    [.status.traffic[] | select(.percent == 100) | .revisionName]
+    | unique
+    | if length == 1 then .[0] else error("100 percent traffic revision is not unique") end
   ' <<<"$traffic_json"
 )"
 
