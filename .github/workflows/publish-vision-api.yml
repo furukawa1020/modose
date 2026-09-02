@@ -119,7 +119,7 @@ jobs:
             --timeout 60s \
             --min-instances 0 \
             --max-instances 10 \
-            --allow-unauthenticated \
+            --no-invoker-iam-check \
             --default-url \
             --ingress all \
             --no-traffic \
