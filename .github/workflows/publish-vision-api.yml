@@ -147,6 +147,12 @@ jobs:
           printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
           printf 'service_url=%s\n' "$service_url" >> "$GITHUB_OUTPUT"
 
+      - name: Verify deployed HTTP health
+        shell: bash
+        env:
+          SERVICE_URL: ${{ steps.deploy.outputs.service_url }}
+        run: bash .github/scripts/smoke-cloud-run.sh
+
       - name: Record deployment evidence
         shell: bash
         env:
