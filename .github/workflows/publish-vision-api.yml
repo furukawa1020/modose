@@ -117,7 +117,7 @@ jobs:
             --timeout 60s \
             --min-instances 0 \
             --max-instances 10 \
-            --no-allow-unauthenticated \
+            --allow-unauthenticated \
             --set-env-vars "APP_ENV=$APP_ENV,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID,GOOGLE_CLOUD_LOCATION=$GCP_REGION,VLM_MODEL_ID=$VLM_MODEL_ID" \
             --quiet
 
