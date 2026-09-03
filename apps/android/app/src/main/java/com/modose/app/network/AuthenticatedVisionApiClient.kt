@@ -72,7 +72,9 @@ class AuthenticatedVisionApiClient(
     private val clientVersion: String,
     private val idTokenProvider: SecurityTokenProvider,
     private val appCheckTokenProvider: SecurityTokenProvider,
-    private val transport: VisionHttpTransport = UrlConnectionVisionHttpTransport(),
+    private val transport: VisionHttpTransport = RetryingVisionHttpTransport(
+        UrlConnectionVisionHttpTransport(),
+    ),
     private val timeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
     private val maximumResponseBytes: Int = DEFAULT_MAXIMUM_RESPONSE_BYTES,
 ) {
