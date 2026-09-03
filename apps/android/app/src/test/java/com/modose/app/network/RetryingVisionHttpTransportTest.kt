@@ -21,10 +21,9 @@ class RetryingVisionHttpTransportTest {
         val result = transport.execute(request())
 
         assertEquals(2, delegate.requests.size)
-        assertEquals(
-            VisionTransportResult.Received(VisionTransportResponse(200, "ok".toByteArray())),
-            result,
-        )
+        val received = result as VisionTransportResult.Received
+        assertEquals(200, received.response.statusCode)
+        assertArrayEquals("ok".toByteArray(), received.response.body)
         assertEquals(listOf(250L), clock.sleeps)
     }
 
@@ -36,7 +35,9 @@ class RetryingVisionHttpTransportTest {
         val result = transport.execute(request())
 
         assertEquals(1, delegate.requests.size)
-        assertEquals(response(401), result)
+        val received = result as VisionTransportResult.Received
+        assertEquals(401, received.response.statusCode)
+        assertArrayEquals(ByteArray(0), received.response.body)
     }
 
     @Test
