@@ -1,5 +1,6 @@
 package com.modose.app.network
 
+import java.net.URL
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -117,7 +118,7 @@ class RetryingVisionHttpTransportTest {
 
     private fun request() = VisionTransportRequest(
         method = VisionHttpMethod.POST,
-        url = "https://vision.example.test/v1/scenes/baseline",
+        url = URL("https://vision.example.test/v1/scenes/baseline"),
         headers = mapOf(
             "Authorization" to "Bearer id-token",
             "X-Firebase-AppCheck" to "app-check-token",
