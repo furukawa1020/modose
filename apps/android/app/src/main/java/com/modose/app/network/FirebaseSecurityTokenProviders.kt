@@ -50,23 +50,35 @@ class FirebaseAppCheckTokenProvider(
     ).getToken()
 }
 
-internal class TaskSecurityTokenProvider<T>(
+internal class TaskSecurityTokenProvider<T : Any>(
     private val request: () -> Task<T>,
     private val tokenOf: (T) -> String?,
     private val timeoutMillis: Long,
 ) : SecurityTokenProvider {
     override fun getToken(): String? {
-        val result = try {
-            Tasks.await(request(), timeoutMillis, TimeUnit.MILLISECONDS)
-        } catch (_: TimeoutException) {
-            return null
-        } catch (_: ExecutionException) {
-            return null
+        val task = try {
+            request()
         } catch (_: RuntimeException) {
             return null
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            return null
+        }
+        val result = if (task.isComplete) {
+            if (!task.isSuccessful) {
+                return null
+            }
+            task.result ?: return null
+        } else {
+            try {
+                Tasks.await(task, timeoutMillis, TimeUnit.MILLISECONDS)
+            } catch (_: TimeoutException) {
+                return null
+            } catch (_: ExecutionException) {
+                return null
+            } catch (_: RuntimeException) {
+                return null
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return null
+            }
         }
 
         return tokenOf(result)?.trim()?.takeIf(String::isNotEmpty)
