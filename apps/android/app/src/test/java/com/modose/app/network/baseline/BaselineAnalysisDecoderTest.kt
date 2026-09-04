@@ -61,18 +61,7 @@ class BaselineAnalysisDecoderTest {
         )
         assertRejected(
             BaselineContractViolation.MissingField,
-            validJson().replace(
-                """          "objects":[{
-            "id":"object-1",
-            "displayName":"鍵",
-            "appearanceFeatures":["銀色","黒い持ち手"],
-            "boundingBox":{"yMin":100,"xMin":200,"yMax":600,"xMax":800},
-            "orientationImportant":true,
-            "symmetry":"bilateral"
-          }],
-""",
-                "",
-            ),
+            validJson().replace("\"objects\"", "\"removedObjects\""),
         )
     }
 
