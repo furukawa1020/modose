@@ -33,7 +33,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -244,9 +243,9 @@ private fun Modifier.manualBoxInput(
                 end = it
                 onDragChanged(it, it)
             },
-            onDrag = { change, dragAmount ->
+            onDrag = { change, _ ->
                 change.consume()
-                end = (end ?: change.position) + dragAmount
+                end = change.position
                 val initial = start
                 val current = end
                 if (initial != null && current != null) {
