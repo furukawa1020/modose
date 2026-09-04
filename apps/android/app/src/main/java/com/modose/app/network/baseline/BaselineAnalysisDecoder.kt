@@ -1,6 +1,7 @@
 package com.modose.app.network.baseline
 
 import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import kotlinx.serialization.json.Json
