@@ -118,7 +118,7 @@ object BaselineAnalysisDecoder {
             value.requireConstant("promptVersion", "baseline-v1")
             val objects = value.arrayValue("objects")
             if (objects.size !in 1..5) fail(BaselineContractViolation.InvalidLength)
-            val parsedObjects = objects.map(JsonElement::baselineObject)
+            val parsedObjects = objects.map { it.baselineObject() }
             if (parsedObjects.map(BaselineObject::id).toSet().size != parsedObjects.size) {
                 fail(BaselineContractViolation.DuplicateObjectId)
             }
@@ -129,7 +129,7 @@ object BaselineAnalysisDecoder {
                 modelId = value.stringValue("modelId", 1, 128),
                 repaired = value.booleanValue("repaired"),
                 objects = parsedObjects,
-                excludedCandidates = excluded.map(JsonElement::excludedCandidate),
+                excludedCandidates = excluded.map { it.excludedCandidate() },
             )
         }
 
