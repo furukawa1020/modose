@@ -148,7 +148,7 @@ object ScenePersistencePlanFactory {
             digest.field(index.toString())
             digest.field(objectValue.id)
             digest.field(objectValue.displayName)
-            objectValue.appearanceFeatures.forEach(digest::field)
+            objectValue.appearanceFeatures.forEach { digest.field(it) }
             digest.field(objectValue.boundingBox.yMin.toString())
             digest.field(objectValue.boundingBox.xMin.toString())
             digest.field(objectValue.boundingBox.yMax.toString())
