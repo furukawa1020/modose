@@ -151,7 +151,7 @@ class LoadMoveObjectsIntermissionUseCaseTest {
                     xMax = 600,
                     orientationImportant = false,
                     symmetry = "none",
-                    source = "DETECTED",
+                    source = "detected",
                 ),
             ),
         )
