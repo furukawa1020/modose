@@ -218,8 +218,8 @@ class CommitSavedSceneAndWaitUseCaseTest {
             promptVersion = "prompt-v1",
             vlmRepaired = false,
             imageFileName = SCENE_ID + ".jpg",
-            imageSha256 = "sha256",
-            contentFingerprint = "fingerprint",
+            imageSha256 = "a".repeat(64),
+            contentFingerprint = "b".repeat(64),
             storageState = SceneStorageState.COMMITTED,
         )
     }
