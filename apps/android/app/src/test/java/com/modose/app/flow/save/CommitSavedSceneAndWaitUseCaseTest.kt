@@ -211,7 +211,7 @@ class CommitSavedSceneAndWaitUseCaseTest {
 
         private fun sceneEntity() = SceneEntity(
             sceneId = SCENE_ID,
-            schemaVersion = "1",
+            schemaVersion = "1.0",
             createdAtEpochMillis = 100L,
             committedAtEpochMillis = 200L,
             modelId = "model",
