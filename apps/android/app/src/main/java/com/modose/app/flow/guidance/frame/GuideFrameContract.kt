@@ -52,7 +52,6 @@ sealed interface GuideFrameVisual {
 enum class GuideFrameFreezeReason {
     TrackingLost,
     AmbiguousTracking,
-    UpdateRateLimited,
 }
 
 enum class GuideFrameRejection {
@@ -75,8 +74,8 @@ sealed interface GuideFrameUpdateResult {
 }
 
 object GuideFrameContract {
-    const val UPDATE_HZ = 15L
-    const val MIN_UPDATE_INTERVAL_NANOS = 1_000_000_000L / UPDATE_HZ
+    const val MINIMUM_UPDATE_HZ = 15L
+    const val MAX_UPDATE_INTERVAL_NANOS = 1_000_000_000L / MINIMUM_UPDATE_HZ
     const val ALIGNMENT_ENTER_METERS = 0.03
     const val ALIGNMENT_EXIT_METERS = 0.05
     const val REQUIRED_STABLE_MILLIS = 800L
