@@ -1,5 +1,6 @@
 package com.modose.app.flow.recovery
 
+import java.lang.reflect.Modifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -138,7 +139,7 @@ class ProductRecoveryMatrixTest {
     @Test
     fun `UIモデルは自由文フィールドを持たない`() {
         val fields = RecoveryUiModel::class.java.declaredFields
-            .filterNot { it.isSynthetic }
+            .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }
 
         assertFalse(fields.isEmpty())
         assertTrue(fields.none { it.type == String::class.java })
