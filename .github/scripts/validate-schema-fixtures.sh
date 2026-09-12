@@ -9,11 +9,24 @@ trap 'rm -rf "$validator_dir"' EXIT
 GOBIN="$validator_dir" go install github.com/santhosh-tekuri/jsonschema/cmd/jv@v0.7.0
 
 total=0
-for category in baseline compare verify; do
+for category in baseline compare verify http-adversarial; do
   case "$category" in
-    baseline) schema="api/schemas/baseline-analysis.schema.json" ;;
-    compare) schema="api/schemas/scene-comparison.schema.json" ;;
-    verify) schema="api/schemas/scene-verification.schema.json" ;;
+    baseline)
+      schema="api/schemas/baseline-analysis.schema.json"
+      expected_total=3
+      ;;
+    compare)
+      schema="api/schemas/scene-comparison.schema.json"
+      expected_total=3
+      ;;
+    verify)
+      schema="api/schemas/scene-verification.schema.json"
+      expected_total=3
+      ;;
+    http-adversarial)
+      schema="api/schemas/adversarial-http-cases.schema.json"
+      expected_total=1
+      ;;
   esac
 
   category_total=0
@@ -45,15 +58,15 @@ for category in baseline compare verify; do
     ((total += 1))
   done
 
-  if [[ "$category_total" -ne 3 ]]; then
-    echo "Expected 3 $category fixtures, found $category_total" >&2
+  if [[ "$category_total" -ne "$expected_total" ]]; then
+    echo "Expected $expected_total $category fixtures, found $category_total" >&2
     exit 1
   fi
 done
 
-if [[ "$total" -ne 9 ]]; then
-  echo "Expected 9 schema fixtures, found $total" >&2
+if [[ "$total" -ne 10 ]]; then
+  echo "Expected 10 schema fixtures, found $total" >&2
   exit 1
 fi
 
-echo "Validated 9 schema fixtures"
+echo "Validated 10 schema fixtures"
