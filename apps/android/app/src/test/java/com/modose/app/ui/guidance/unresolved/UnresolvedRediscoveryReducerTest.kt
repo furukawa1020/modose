@@ -92,8 +92,8 @@ class UnresolvedRediscoveryReducerTest {
 
         val guiding = result.state as SingleObjectGuideState.Guiding
         assertTrue(
-            listOf(guiding.active.sceneObjectId) + guiding.remainingObjectIds
-                contains OBJECT_ID,
+            (listOf(guiding.active.sceneObjectId) + guiding.remainingObjectIds)
+                .contains(OBJECT_ID),
         )
     }
 
