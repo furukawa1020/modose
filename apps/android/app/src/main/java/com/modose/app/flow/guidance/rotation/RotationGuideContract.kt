@@ -29,6 +29,7 @@ enum class RotationGuideHiddenReason {
     OrientationNotMeaningful,
     ContinuousSymmetry,
     EquivalentBySymmetry,
+    BelowDisplayThreshold,
     ObjectMissing,
     ObjectAmbiguous,
     StateDoesNotRequireRotation,
