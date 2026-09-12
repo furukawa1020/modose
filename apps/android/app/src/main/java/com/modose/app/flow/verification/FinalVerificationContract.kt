@@ -59,6 +59,7 @@ enum class VerificationAttemptFailure {
     UnresolvedObjectsRemain,
     AttemptLimitExceeded,
     DuplicateAttempt,
+    InvalidAttemptKey,
 }
 
 sealed interface VerificationAttemptResult {
