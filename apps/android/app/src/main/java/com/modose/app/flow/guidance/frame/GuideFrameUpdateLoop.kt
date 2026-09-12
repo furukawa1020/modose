@@ -1,49 +1,62 @@
 package com.modose.app.flow.guidance.frame
 
+enum class GuideFrameCadence {
+    FirstValidFrame,
+    MeetsMinimumRate,
+    BelowMinimumRate,
+    TrackingUnavailable,
+    TimestampInvalid,
+}
+
+data class GuideFrameLoopResult(
+    val update: GuideFrameUpdateResult,
+    val cadence: GuideFrameCadence,
+)
+
 class GuideFrameUpdateLoop {
     private val controller = GuideFrameHysteresisController()
     private var lastSeenTimestampNanos: Long? = null
-    private var lastAcceptedTimestampNanos: Long? = null
-    private var lastVisual: GuideFrameVisual? = null
+    private var lastValidTimestampNanos: Long? = null
 
-    fun update(input: GuideFrameInput): GuideFrameUpdateResult {
+    fun update(input: GuideFrameInput): GuideFrameLoopResult {
         val lastSeen = lastSeenTimestampNanos
         if (lastSeen != null && input.frameTimestampNanos < lastSeen) {
-            return GuideFrameUpdateResult.Rejected(
-                GuideFrameRejection.TimestampMovedBackwards,
+            return GuideFrameLoopResult(
+                update = GuideFrameUpdateResult.Rejected(
+                    GuideFrameRejection.TimestampMovedBackwards,
+                ),
+                cadence = GuideFrameCadence.TimestampInvalid,
             )
         }
         lastSeenTimestampNanos = input.frameTimestampNanos
 
         if (input.trackingState != GuideTrackingState.Valid) {
-            lastAcceptedTimestampNanos = null
-            return controller.update(input)
-        }
-
-        val lastAccepted = lastAcceptedTimestampNanos
-        if (
-            lastAccepted != null &&
-            input.frameTimestampNanos - lastAccepted <
-            GuideFrameContract.MIN_UPDATE_INTERVAL_NANOS
-        ) {
-            return GuideFrameUpdateResult.Frozen(
-                previousVisual = lastVisual,
-                reason = GuideFrameFreezeReason.UpdateRateLimited,
+            lastValidTimestampNanos = null
+            return GuideFrameLoopResult(
+                update = controller.update(input),
+                cadence = GuideFrameCadence.TrackingUnavailable,
             )
         }
 
-        lastAcceptedTimestampNanos = input.frameTimestampNanos
-        val result = controller.update(input)
-        if (result is GuideFrameUpdateResult.Updated) {
-            lastVisual = result.visual
+        val previousValid = lastValidTimestampNanos
+        val cadence = when {
+            previousValid == null -> GuideFrameCadence.FirstValidFrame
+            input.frameTimestampNanos - previousValid <=
+                GuideFrameContract.MAX_UPDATE_INTERVAL_NANOS ->
+                GuideFrameCadence.MeetsMinimumRate
+            else -> GuideFrameCadence.BelowMinimumRate
         }
-        return result
+        lastValidTimestampNanos = input.frameTimestampNanos
+
+        return GuideFrameLoopResult(
+            update = controller.update(input),
+            cadence = cadence,
+        )
     }
 
     fun reset() {
         controller.reset()
         lastSeenTimestampNanos = null
-        lastAcceptedTimestampNanos = null
-        lastVisual = null
+        lastValidTimestampNanos = null
     }
 }
