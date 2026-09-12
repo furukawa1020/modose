@@ -60,6 +60,7 @@ enum class VerificationAttemptFailure {
     AttemptLimitExceeded,
     DuplicateAttempt,
     InvalidAttemptKey,
+    InvalidState,
 }
 
 sealed interface VerificationAttemptResult {
