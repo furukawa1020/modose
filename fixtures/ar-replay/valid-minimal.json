@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0",
+  "sessionId": "desk-return-001",
+  "anchorPose": {
+    "translationMeters": [0.0, 0.72, 0.0],
+    "rotationQuaternion": [0.0, 0.0, 0.0, 1.0]
+  },
+  "frames": [
+    {
+      "index": 0,
+      "timestampNanos": 1000000000,
+      "trackingState": "tracking",
+      "cameraPose": {
+        "translationMeters": [0.0, 1.1, 0.45],
+        "rotationQuaternion": [0.0, 0.0, 0.0, 1.0]
+      },
+      "objects": [
+        {
+          "objectId": "wallet",
+          "currentPlanePositionMeters": [0.18, 0.12],
+          "targetPlanePositionMeters": [0.0, 0.0],
+          "matchState": "accepted",
+          "trackingValid": true
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "timestampNanos": 1100000000,
+      "trackingState": "tracking",
+      "cameraPose": {
+        "translationMeters": [0.01, 1.1, 0.44],
+        "rotationQuaternion": [0.0, 0.0, 0.0, 1.0]
+      },
+      "objects": [
+        {
+          "objectId": "wallet",
+          "currentPlanePositionMeters": [0.02, 0.01],
+          "targetPlanePositionMeters": [0.0, 0.0],
+          "matchState": "accepted",
+          "trackingValid": true
+        }
+      ]
+    }
+  ]
+}
