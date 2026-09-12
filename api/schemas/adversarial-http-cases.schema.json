@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modose.example/schemas/adversarial-http-cases.schema.json",
+  "title": "MODOSE adversarial HTTP cases",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "cases"],
+  "properties": {
+    "version": {
+      "const": "1.0"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "category",
+        "endpoint",
+        "inputStrategy",
+        "expectedStatus",
+        "expectedCode"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "category": {
+          "enum": [
+            "malformed_json",
+            "unknown_enum",
+            "oversize",
+            "auth_failure",
+            "prompt_injection"
+          ]
+        },
+        "endpoint": {
+          "enum": ["baseline", "compare", "verify"]
+        },
+        "inputStrategy": {
+          "enum": [
+            "literal_malformed_json",
+            "literal_unknown_enum",
+            "generated_oversize_image",
+            "omitted_auth_headers",
+            "generated_prompt_injection_image"
+          ]
+        },
+        "expectedStatus": {
+          "enum": [400, 401, 413, 422]
+        },
+        "expectedCode": {
+          "enum": [
+            "invalid_request",
+            "unauthorized",
+            "payload_too_large",
+            "analysis_rejected"
+          ]
+        }
+      }
+    }
+  }
+}
