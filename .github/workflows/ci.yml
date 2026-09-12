@@ -205,6 +205,69 @@ jobs:
       - name: Validate schema fixtures
         run: bash .github/scripts/validate-schema-fixtures.sh
 
+  adversarial:
+    name: API adversarial contract
+    needs: changes
+    if: ${{ needs.changes.outputs.go == 'true' || needs.changes.outputs.contract == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: services/vision-api/go.mod
+          cache: false
+
+      - name: Validate adversarial fixture contract
+        run: bash .github/scripts/validate-schema-fixtures.sh
+
+      - name: Run adversarial API boundary tests
+        shell: bash
+        run: |
+          go -C services/vision-api test \
+            ./internal/baseline \
+            ./internal/httpapi \
+            -run 'Test(BuildRequestKeepsImageInstructionsOutOfTrustedText|SystemInstructionDeclaresImageTextUntrusted|BaselineHandlerRejectsMalformedMetadataBeforeAnalysis|CompareHandlerRejectsUnknownDomainEnumBeforeAnalysis|ProtectedBaselineRejectsAuthBeforeParsingOversizedBody)    name: CI gate
+    if: always()
+    needs:
+      - changes
+      - android
+      - rust
+      - go
+      - container
+      - contract
+      - adversarial
+    runs-on: ubuntu-latest
+    env:
+      CHANGES_RESULT: ${{ needs.changes.result }}
+      ANDROID_RESULT: ${{ needs.android.result }}
+      RUST_RESULT: ${{ needs.rust.result }}
+      GO_RESULT: ${{ needs.go.result }}
+      CONTAINER_RESULT: ${{ needs.container.result }}
+      CONTRACT_RESULT: ${{ needs.contract.result }}
+      ADVERSARIAL_RESULT: ${{ needs.adversarial.result }}
+    steps:
+      - name: Require successful applicable checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          for result in \
+            "$CHANGES_RESULT" \
+            "$ANDROID_RESULT" \
+            "$RUST_RESULT" \
+            "$GO_RESULT" \
+            "$CONTAINER_RESULT" \
+            "$CONTRACT_RESULT" \
+            "$ADVERSARIAL_RESULT"; do
+            case "$result" in
+              success|skipped) ;;
+              *) exit 1 ;;
+            esac
+          done
+
+
   ci-gate:
     name: CI gate
     if: always()
