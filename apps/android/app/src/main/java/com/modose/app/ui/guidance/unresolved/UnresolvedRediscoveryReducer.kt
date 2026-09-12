@@ -36,7 +36,7 @@ sealed interface UnresolvedRediscoveryEffect {
     data class CaptureAndCompare(
         val sceneId: String,
         val objectId: String,
-        val idempotencyKey: String,
+        val attemptKey: String,
     ) : UnresolvedRediscoveryEffect
 }
 
@@ -88,15 +88,13 @@ object UnresolvedRediscoveryReducer {
             effect = UnresolvedRediscoveryEffect.CaptureAndCompare(
                 sceneId = state.model.sceneId,
                 objectId = state.model.objectId,
-                idempotencyKey =
+                attemptKey =
                     state.model.sceneId + ":" + state.model.objectId + ":" + attempt,
             ),
         )
     }
 
-    private fun complete(
-        state: UnresolvedRediscoveryState,
-    ): UnresolvedRediscoveryUpdate =
+    private fun complete(state: UnresolvedRediscoveryState): UnresolvedRediscoveryUpdate =
         if (state.status != RediscoveryStatus.InFlight) {
             UnresolvedRediscoveryUpdate(state)
         } else {
@@ -124,9 +122,7 @@ object UnresolvedRediscoveryReducer {
             )
         }
 
-    private fun fail(
-        state: UnresolvedRediscoveryState,
-    ): UnresolvedRediscoveryUpdate =
+    private fun fail(state: UnresolvedRediscoveryState): UnresolvedRediscoveryUpdate =
         if (state.status != RediscoveryStatus.InFlight) {
             UnresolvedRediscoveryUpdate(state)
         } else {
