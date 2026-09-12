@@ -14,8 +14,8 @@
       "category": "unknown_enum",
       "endpoint": "compare",
       "inputStrategy": "literal_unknown_enum",
-      "expectedStatus": 400,
-      "expectedCode": "invalid_request"
+      "expectedStatus": 422,
+      "expectedCode": "analysis_rejected"
     },
     {
       "id": "baseline-oversize-image",
