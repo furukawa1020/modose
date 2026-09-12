@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modose.example/schemas/ar-session-replay.schema.json",
+  "title": "MODOSE recorded AR session",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sessionId", "anchorPose", "frames"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "anchorPose": {"$ref": "#/$defs/pose"},
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3600,
+      "items": {"$ref": "#/$defs/frame"}
+    }
+  },
+  "$defs": {
+    "vector3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"type": "number"}
+    },
+    "planePosition": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"type": "number"}
+    },
+    "quaternion": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"type": "number", "minimum": -1, "maximum": 1}
+    },
+    "pose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["translationMeters", "rotationQuaternion"],
+      "properties": {
+        "translationMeters": {"$ref": "#/$defs/vector3"},
+        "rotationQuaternion": {"$ref": "#/$defs/quaternion"}
+      }
+    },
+    "trackedObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectId",
+        "currentPlanePositionMeters",
+        "targetPlanePositionMeters",
+        "matchState",
+        "trackingValid"
+      ],
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "currentPlanePositionMeters": {
+          "$ref": "#/$defs/planePosition"
+        },
+        "targetPlanePositionMeters": {
+          "$ref": "#/$defs/planePosition"
+        },
+        "matchState": {
+          "enum": ["accepted", "ambiguous", "missing"]
+        },
+        "trackingValid": {"type": "boolean"}
+      }
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "timestampNanos",
+        "trackingState",
+        "cameraPose",
+        "objects"
+      ],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0},
+        "timestampNanos": {"type": "integer", "minimum": 0},
+        "trackingState": {
+          "enum": ["tracking", "paused", "stopped"]
+        },
+        "cameraPose": {"$ref": "#/$defs/pose"},
+        "objects": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {"$ref": "#/$defs/trackedObject"}
+        }
+      }
+    }
+  }
+}
