@@ -32,12 +32,15 @@ import com.modose.app.ar.session.ArTrackingDiagnostics
 import com.modose.app.ar.render.CameraBackgroundSurfaceController
 import com.modose.app.ar.render.CameraBackgroundSurfaceFailure
 import com.modose.app.ar.render.CameraSurfaceControllerRegistry
-import com.modose.app.permission.CameraPermissionPolicy
+import com.modose.app.permission.CameraPermissionAdapter
 import com.modose.app.permission.CameraPermissionState
 import com.modose.app.ui.ModoseApp
 
 class MainActivity : ComponentActivity() {
     private val appContainer by lazy { (application as ModoseApplication).appContainer }
+    private val cameraPermissionAdapter by lazy {
+        CameraPermissionAdapter(appContainer.cameraPermissionHistory)
+    }
     private var cameraPermissionState by mutableStateOf(CameraPermissionState.InitialRequest)
     private var arCoreGateState by mutableStateOf<ArCoreGateState>(ArCoreGateState.Checking)
     private var arSessionResult by mutableStateOf<ArSessionResult?>(null)
@@ -110,8 +113,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestCameraPermission() {
-        appContainer.cameraPermissionHistory.markRequested()
-        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        cameraPermissionAdapter.request(cameraPermissionState) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     private fun openApplicationSettings() {
@@ -124,12 +128,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshCameraPermission() {
-        cameraPermissionState = CameraPermissionPolicy.resolve(
+        cameraPermissionState = cameraPermissionAdapter.resolve(
             isGranted = ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.CAMERA,
             ) == PackageManager.PERMISSION_GRANTED,
-            hasRequested = appContainer.cameraPermissionHistory.hasRequested,
             shouldShowRationale = shouldShowRequestPermissionRationale(Manifest.permission.CAMERA),
         )
         if (cameraPermissionState == CameraPermissionState.Granted) {
