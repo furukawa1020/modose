@@ -229,7 +229,10 @@ jobs:
           go -C services/vision-api test \
             ./internal/baseline \
             ./internal/httpapi \
-            -run 'Test(BuildRequestKeepsImageInstructionsOutOfTrustedText|SystemInstructionDeclaresImageTextUntrusted|BaselineHandlerRejectsMalformedMetadataBeforeAnalysis|CompareHandlerRejectsUnknownDomainEnumBeforeAnalysis|ProtectedBaselineRejectsAuthBeforeParsingOversizedBody)    name: CI gate
+            -run 'Test(BuildRequestKeepsImageInstructionsOutOfTrustedText|SystemInstructionDeclaresImageTextUntrusted|BaselineHandlerRejectsMalformedMetadataBeforeAnalysis|CompareHandlerRejectsUnknownDomainEnumBeforeAnalysis|ProtectedBaselineRejectsAuthBeforeParsingOversizedBody)'
+
+  ci-gate:
+    name: CI gate
     if: always()
     needs:
       - changes
@@ -261,43 +264,6 @@ jobs:
             "$CONTAINER_RESULT" \
             "$CONTRACT_RESULT" \
             "$ADVERSARIAL_RESULT"; do
-            case "$result" in
-              success|skipped) ;;
-              *) exit 1 ;;
-            esac
-          done
-
-
-  ci-gate:
-    name: CI gate
-    if: always()
-    needs:
-      - changes
-      - android
-      - rust
-      - go
-      - container
-      - contract
-    runs-on: ubuntu-latest
-    env:
-      CHANGES_RESULT: ${{ needs.changes.result }}
-      ANDROID_RESULT: ${{ needs.android.result }}
-      RUST_RESULT: ${{ needs.rust.result }}
-      GO_RESULT: ${{ needs.go.result }}
-      CONTAINER_RESULT: ${{ needs.container.result }}
-      CONTRACT_RESULT: ${{ needs.contract.result }}
-    steps:
-      - name: Require successful applicable checks
-        shell: bash
-        run: |
-          set -euo pipefail
-          for result in \
-            "$CHANGES_RESULT" \
-            "$ANDROID_RESULT" \
-            "$RUST_RESULT" \
-            "$GO_RESULT" \
-            "$CONTAINER_RESULT" \
-            "$CONTRACT_RESULT"; do
             case "$result" in
               success|skipped) ;;
               *) exit 1 ;;
