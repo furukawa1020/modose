@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "cases": [
+    {
+      "id": "baseline-malformed-json",
+      "category": "malformed_json",
+      "endpoint": "baseline",
+      "inputStrategy": "literal_malformed_json",
+      "expectedStatus": 400,
+      "expectedCode": "invalid_request"
+    },
+    {
+      "id": "compare-unknown-enum",
+      "category": "unknown_enum",
+      "endpoint": "compare",
+      "inputStrategy": "literal_unknown_enum",
+      "expectedStatus": 400,
+      "expectedCode": "invalid_request"
+    },
+    {
+      "id": "baseline-oversize-image",
+      "category": "oversize",
+      "endpoint": "baseline",
+      "inputStrategy": "generated_oversize_image",
+      "expectedStatus": 413,
+      "expectedCode": "payload_too_large"
+    },
+    {
+      "id": "verify-missing-auth",
+      "category": "auth_failure",
+      "endpoint": "verify",
+      "inputStrategy": "omitted_auth_headers",
+      "expectedStatus": 401,
+      "expectedCode": "unauthorized"
+    },
+    {
+      "id": "baseline-prompt-injection-image",
+      "category": "prompt_injection",
+      "endpoint": "baseline",
+      "inputStrategy": "generated_prompt_injection_image",
+      "expectedStatus": 422,
+      "expectedCode": "analysis_rejected"
+    }
+  ]
+}
