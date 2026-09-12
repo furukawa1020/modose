@@ -205,6 +205,34 @@ jobs:
       - name: Validate schema fixtures
         run: bash .github/scripts/validate-schema-fixtures.sh
 
+  android-integration:
+    name: Android adapter regression
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Run reducer and adapter regression suite
+        shell: bash
+        run: |
+          bash apps/android/gradlew -p apps/android \
+            :app:testDebugUnitTest \
+            --no-daemon \
+            --tests 'com.modose.app.ui.intermission.MoveObjectsIntermissionTransitionTableTest' \
+            --tests 'com.modose.app.permission.CameraPermissionAdapterTest' \
+            --tests 'com.modose.app.ar.session.ArTrackingDiagnosticsMappingTableTest' \
+            --tests 'com.modose.app.network.VisionApiFailureMappingTableTest' \
+            --tests 'com.modose.app.data.local.SceneSnapshotRepositoryRollbackTest'
+
   adversarial:
     name: API adversarial contract
     needs: changes
@@ -242,6 +270,7 @@ jobs:
       - container
       - contract
       - adversarial
+      - android-integration
     runs-on: ubuntu-latest
     env:
       CHANGES_RESULT: ${{ needs.changes.result }}
@@ -251,6 +280,7 @@ jobs:
       CONTAINER_RESULT: ${{ needs.container.result }}
       CONTRACT_RESULT: ${{ needs.contract.result }}
       ADVERSARIAL_RESULT: ${{ needs.adversarial.result }}
+      ANDROID_INTEGRATION_RESULT: ${{ needs.android-integration.result }}
     steps:
       - name: Require successful applicable checks
         shell: bash
@@ -263,7 +293,8 @@ jobs:
             "$GO_RESULT" \
             "$CONTAINER_RESULT" \
             "$CONTRACT_RESULT" \
-            "$ADVERSARIAL_RESULT"; do
+            "$ADVERSARIAL_RESULT" \
+            "$ANDROID_INTEGRATION_RESULT"; do
             case "$result" in
               success|skipped) ;;
               *) exit 1 ;;
