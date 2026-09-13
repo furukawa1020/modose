@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "runId": "run-20260914-001",
+  "sceneId": "scene-42",
+  "recordedAt": "2026-09-14T03:00:00Z",
+  "appVersion": "1.0.0-rc1",
+  "deviceModel": "Pixel 8",
+  "modelId": "gemini-3.5-flash",
+  "promptVersion": "baseline-v3",
+  "testCaseId": "T11",
+  "objectSet": "A",
+  "surface": "wood",
+  "objectCount": 5,
+  "latenciesMs": {
+    "baseline": 1840,
+    "compare": 1310,
+    "verify": 1520
+  },
+  "vlmCallCount": 3,
+  "matchResult": "matched",
+  "positionErrorsCm": [1.2, 2.4, 2.8, 1.9, 2.1],
+  "finalResult": "verified",
+  "falseSuccess": false,
+  "videoFileName": "run-20260914-001.mp4"
+}
