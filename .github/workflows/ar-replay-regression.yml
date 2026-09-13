@@ -1,0 +1,59 @@
+name: AR replay regression
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ar-replay-regression.yml'
+      - '.github/scripts/validate-schema-fixtures.sh'
+      - 'api/schemas/ar-session-replay.schema.json'
+      - 'fixtures/ar-session/**'
+      - 'apps/android/app/src/main/java/com/modose/app/ar/replay/**'
+      - 'apps/android/app/src/test/java/com/modose/app/ar/replay/**'
+      - 'apps/android/app/src/main/java/com/modose/app/flow/guidance/frame/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ar-replay-regression.yml'
+      - '.github/scripts/validate-schema-fixtures.sh'
+      - 'api/schemas/ar-session-replay.schema.json'
+      - 'fixtures/ar-session/**'
+      - 'apps/android/app/src/main/java/com/modose/app/ar/replay/**'
+      - 'apps/android/app/src/test/java/com/modose/app/ar/replay/**'
+      - 'apps/android/app/src/main/java/com/modose/app/flow/guidance/frame/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ar-replay-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    name: Recorded AR session replay
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate replay fixture schema
+        shell: bash
+        run: bash .github/scripts/validate-schema-fixtures.sh
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Run replay regression suite
+        shell: bash
+        run: |
+          bash apps/android/gradlew -p apps/android \
+            :app:testDebugUnitTest \
+            --no-daemon \
+            --tests 'com.modose.app.ar.replay.RecordedArSessionReaderTest' \
+            --tests 'com.modose.app.ar.replay.RecordedArSessionPlayerTest' \
+            --tests 'com.modose.app.ar.replay.ReplayGuideAssertionEngineTest'
