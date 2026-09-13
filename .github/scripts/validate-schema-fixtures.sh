@@ -9,7 +9,7 @@ trap 'rm -rf "$validator_dir"' EXIT
 GOBIN="$validator_dir" go install github.com/santhosh-tekuri/jsonschema/cmd/jv@v0.7.0
 
 total=0
-for category in baseline compare verify http-adversarial ar-replay; do
+for category in baseline compare verify http-adversarial ar-replay e2e-record; do
   case "$category" in
     baseline)
       schema="api/schemas/baseline-analysis.schema.json"
@@ -29,6 +29,10 @@ for category in baseline compare verify http-adversarial ar-replay; do
       ;;
     ar-replay)
       schema="api/schemas/ar-session-replay.schema.json"
+      expected_total=2
+      ;;
+    e2e-record)
+      schema="api/schemas/physical-e2e-run.schema.json"
       expected_total=2
       ;;
   esac
@@ -68,9 +72,9 @@ for category in baseline compare verify http-adversarial ar-replay; do
   fi
 done
 
-if [[ "$total" -ne 12 ]]; then
-  echo "Expected 12 schema fixtures, found $total" >&2
+if [[ "$total" -ne 14 ]]; then
+  echo "Expected 14 schema fixtures, found $total" >&2
   exit 1
 fi
 
-echo "Validated 12 schema fixtures"
+echo "Validated 14 schema fixtures"
