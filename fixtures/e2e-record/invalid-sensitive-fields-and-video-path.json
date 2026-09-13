@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "runId": "run-20260914-002",
+  "sceneId": "scene-43",
+  "recordedAt": "2026-09-14T03:10:00Z",
+  "appVersion": "1.0.0-rc1",
+  "deviceModel": "Pixel 8",
+  "modelId": "gemini-3.5-flash",
+  "promptVersion": "verify-v2",
+  "testCaseId": "T14",
+  "objectSet": "B",
+  "surface": "patterned",
+  "objectCount": 4,
+  "latenciesMs": {
+    "baseline": 1900,
+    "compare": 1420,
+    "verify": null
+  },
+  "vlmCallCount": 2,
+  "matchResult": "matched",
+  "positionErrorsCm": [],
+  "finalResult": "verified",
+  "falseSuccess": true,
+  "videoFileName": "../private/run-20260914-002.mp4",
+  "objectNames": ["wallet", "keys"]
+}
