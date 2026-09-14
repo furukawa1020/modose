@@ -22,9 +22,9 @@ class PhysicalE2eExecutionLoggerTest {
         assertTrue(result is E2eLoggerResult.Finished)
         val record = (result as E2eLoggerResult.Finished).record
         assertEquals(4, record.vlmCallCount)
-        assertEquals(900, record.latencies.baselineMillis)
-        assertEquals(800, record.latencies.compareMillis)
-        assertEquals(700, record.latencies.verifyMillis)
+        assertEquals(900L, record.latencies.baselineMillis)
+        assertEquals(800L, record.latencies.compareMillis)
+        assertEquals(700L, record.latencies.verifyMillis)
     }
 
     @Test
