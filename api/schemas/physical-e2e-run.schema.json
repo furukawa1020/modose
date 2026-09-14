@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modose.example/schemas/physical-e2e-run.schema.json",
+  "title": "MODOSE physical E2E run evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "sceneId",
+    "recordedAt",
+    "appVersion",
+    "deviceModel",
+    "modelId",
+    "promptVersion",
+    "testCaseId",
+    "objectSet",
+    "surface",
+    "objectCount",
+    "latenciesMs",
+    "vlmCallCount",
+    "matchResult",
+    "positionErrorsCm",
+    "finalResult",
+    "falseSuccess",
+    "videoFileName"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {"$ref": "#/$defs/safeId"},
+    "sceneId": {"$ref": "#/$defs/safeId"},
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "appVersion": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$"
+    },
+    "deviceModel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "modelId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$"
+    },
+    "promptVersion": {"$ref": "#/$defs/safeId"},
+    "testCaseId": {
+      "type": "string",
+      "pattern": "^T(0[1-9]|1[0-9]|20)$"
+    },
+    "objectSet": {"enum": ["A", "B", "C", "D"]},
+    "surface": {
+      "enum": ["wood", "white", "black", "patterned", "venue"]
+    },
+    "objectCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6
+    },
+    "latenciesMs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline", "compare", "verify"],
+      "properties": {
+        "baseline": {"$ref": "#/$defs/latency"},
+        "compare": {"$ref": "#/$defs/latency"},
+        "verify": {"$ref": "#/$defs/latency"}
+      }
+    },
+    "vlmCallCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6
+    },
+    "matchResult": {
+      "enum": ["matched", "missing", "ambiguous", "mixed", "not_run"]
+    },
+    "positionErrorsCm": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 200
+      }
+    },
+    "finalResult": {
+      "enum": [
+        "verified",
+        "needs_correction",
+        "uncertain",
+        "manual_confirmation",
+        "rejected",
+        "aborted"
+      ]
+    },
+    "falseSuccess": {"type": "boolean"},
+    "videoFileName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.mp4$"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "latency": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 12000
+    }
+  }
+}
