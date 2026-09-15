@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modose.example/schemas/physical-e2e-resilience.schema.json",
+  "title": "MODOSE physical E2E resilience evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "testCaseId", "events"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {"type": "string", "pattern": "^P[0-9]{3}$"},
+    "testCaseId": {"enum": ["T13", "T14", "T15", "T16"]},
+    "events": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 40,
+      "items": {"$ref": "#/$defs/event"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"testCaseId": {"const": "T13"}}},
+      "then": {
+        "properties": {
+          "events": {
+            "allOf": [
+              {"contains": {"$ref": "#/$defs/networkLost"}, "minContains": 1},
+              {
+                "contains": {
+                  "properties": {
+                    "type": {"const": "local_guidance_continued"}
+                  },
+                  "required": ["type"]
+                },
+                "minContains": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"testCaseId": {"const": "T14"}}},
+      "then": {
+        "properties": {
+          "events": {
+            "allOf": [
+              {"contains": {"$ref": "#/$defs/networkLost"}, "minContains": 1},
+              {
+                "contains": {
+                  "properties": {
+                    "type": {"const": "verification_waiting"}
+                  },
+                  "required": ["type"]
+                },
+                "minContains": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"testCaseId": {"const": "T15"}}},
+      "then": {
+        "properties": {
+          "events": {
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {"type": {"const": "backgrounded"}},
+                  "required": ["type"]
+                },
+                "minContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "type": {"const": "resumed"},
+                    "elapsedMillis": {"maximum": 300000}
+                  },
+                  "required": ["type", "elapsedMillis"]
+                },
+                "minContains": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"testCaseId": {"const": "T16"}}},
+      "then": {
+        "properties": {
+          "events": {
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {"type": {"const": "process_killed"}},
+                  "required": ["type"]
+                },
+                "minContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "type": {"const": "session_unavailable"}
+                  },
+                  "required": ["type"]
+                },
+                "minContains": 1
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "networkLost": {
+      "properties": {"type": {"const": "network_lost"}},
+      "required": ["type"]
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timestampNanos",
+        "type",
+        "realityRestoredShown"
+      ],
+      "properties": {
+        "timestampNanos": {"type": "integer", "minimum": 0},
+        "type": {
+          "enum": [
+            "network_lost",
+            "local_guidance_continued",
+            "verification_waiting",
+            "backgrounded",
+            "resumed",
+            "process_killed",
+            "session_unavailable"
+          ]
+        },
+        "elapsedMillis": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300000
+        },
+        "realityRestoredShown": {"const": false}
+      }
+    }
+  }
+}
