@@ -1,0 +1,38 @@
+name: Physical E2E evidence
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/physical-e2e-evidence.yml'
+      - '.github/scripts/validate-basic-e2e-evidence.py'
+      - '.github/scripts/test_validate_basic_e2e_evidence.py'
+      - 'evidence/physical-e2e/run-plan-v1.csv'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/physical-e2e-evidence.yml'
+      - '.github/scripts/validate-basic-e2e-evidence.py'
+      - '.github/scripts/test_validate_basic_e2e_evidence.py'
+      - 'evidence/physical-e2e/run-plan-v1.csv'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: physical-e2e-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validator:
+    name: Validate basic evidence intake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate 60-run plan
+        run: python3 .github/scripts/validate-physical-e2e-plan.py
+
+      - name: Test basic evidence validator
+        run: python3 .github/scripts/test_validate_basic_e2e_evidence.py
