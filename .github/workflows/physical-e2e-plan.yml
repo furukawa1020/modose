@@ -1,0 +1,33 @@
+name: Physical E2E plan
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/physical-e2e-plan.yml'
+      - '.github/scripts/validate-physical-e2e-plan.py'
+      - 'evidence/physical-e2e/run-plan-v1.csv'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/physical-e2e-plan.yml'
+      - '.github/scripts/validate-physical-e2e-plan.py'
+      - 'evidence/physical-e2e/run-plan-v1.csv'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: physical-e2e-plan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate 60-run physical E2E plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate planned coverage
+        run: python3 .github/scripts/validate-physical-e2e-plan.py
