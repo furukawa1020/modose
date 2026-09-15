@@ -1,0 +1,51 @@
+name: Physical E2E resilience evidence
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/physical-e2e-resilience.yml'
+      - 'api/schemas/physical-e2e-resilience.schema.json'
+      - 'fixtures/e2e-resilience/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/physical-e2e-resilience.yml'
+      - 'api/schemas/physical-e2e-resilience.schema.json'
+      - 'fixtures/e2e-resilience/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: physical-e2e-resilience-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validate resilience evidence contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: services/vision-api/go.mod
+          cache: false
+
+      - name: Validate accepted and rejected evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir="$RUNNER_TEMP/e2e-resilience"
+          mkdir -p "$tool_dir"
+          GOBIN="$tool_dir"             go install github.com/santhosh-tekuri/jsonschema/cmd/jv@v0.7.0
+          validator="$tool_dir/jv"
+          schema="api/schemas/physical-e2e-resilience.schema.json"
+          "$validator" --quiet             "$schema"             fixtures/e2e-resilience/valid-verification-network-loss.json
+          if "$validator" --quiet             "$schema"             fixtures/e2e-resilience/invalid-process-kill-shows-success.json; then
+            echo "invalid process-kill evidence was accepted" >&2
+            exit 1
+          fi
