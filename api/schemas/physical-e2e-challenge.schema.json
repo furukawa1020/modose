@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modose.example/schemas/physical-e2e-challenge.schema.json",
+  "title": "MODOSE physical E2E challenge evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "testCaseId", "observations"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {
+      "type": "string",
+      "pattern": "^P[0-9]{3}$"
+    },
+    "testCaseId": {
+      "enum": ["T06", "T07", "T08", "T12"]
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 120,
+      "items": {"$ref": "#/$defs/observation"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"testCaseId": {"const": "T06"}}},
+      "then": {
+        "properties": {
+          "observations": {
+            "contains": {
+              "properties": {
+                "classification": {"const": "missing"},
+                "guideBehavior": {"const": "thumbnail"}
+              },
+              "required": ["classification", "guideBehavior"]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"testCaseId": {"const": "T07"}}},
+      "then": {
+        "properties": {
+          "observations": {
+            "contains": {
+              "properties": {"classification": {"const": "occluded"}},
+              "required": ["classification"]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"testCaseId": {"const": "T08"}}},
+      "then": {
+        "properties": {
+          "observations": {
+            "contains": {
+              "properties": {
+                "classification": {"const": "extra"},
+                "guideBehavior": {"const": "correction_required"}
+              },
+              "required": ["classification", "guideBehavior"]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"testCaseId": {"const": "T12"}}},
+      "then": {
+        "properties": {
+          "observations": {
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "classification": {
+                      "enum": ["occluded", "ambiguous"]
+                    },
+                    "guideBehavior": {"const": "frozen"}
+                  },
+                  "required": ["classification", "guideBehavior"]
+                },
+                "minContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "classification": {"const": "recovered"},
+                    "guideBehavior": {"const": "resumed"}
+                  },
+                  "required": ["classification", "guideBehavior"]
+                },
+                "minContains": 1
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frameTimestampNanos",
+        "phase",
+        "classification",
+        "guideBehavior",
+        "realityRestoredShown"
+      ],
+      "properties": {
+        "frameTimestampNanos": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "phase": {
+          "enum": ["compare", "guidance", "verify"]
+        },
+        "classification": {
+          "enum": [
+            "missing",
+            "occluded",
+            "ambiguous",
+            "extra",
+            "recovered"
+          ]
+        },
+        "guideBehavior": {
+          "enum": [
+            "frozen",
+            "thumbnail",
+            "correction_required",
+            "resumed"
+          ]
+        },
+        "realityRestoredShown": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"classification": {"const": "missing"}}
+          },
+          "then": {
+            "properties": {
+              "guideBehavior": {"enum": ["thumbnail", "frozen"]}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "classification": {"enum": ["occluded", "ambiguous"]}
+            }
+          },
+          "then": {
+            "properties": {"guideBehavior": {"const": "frozen"}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"classification": {"const": "extra"}}
+          },
+          "then": {
+            "properties": {
+              "guideBehavior": {"const": "correction_required"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"classification": {"const": "recovered"}}
+          },
+          "then": {
+            "properties": {"guideBehavior": {"const": "resumed"}}
+          }
+        }
+      ]
+    }
+  }
+}

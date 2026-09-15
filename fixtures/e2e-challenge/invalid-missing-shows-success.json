@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "runId": "P006",
+  "testCaseId": "T06",
+  "observations": [
+    {
+      "frameTimestampNanos": 1000000000,
+      "phase": "guidance",
+      "classification": "missing",
+      "guideBehavior": "resumed",
+      "realityRestoredShown": true
+    }
+  ]
+}
