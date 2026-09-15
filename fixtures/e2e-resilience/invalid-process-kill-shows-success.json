@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "runId": "P052",
+  "testCaseId": "T16",
+  "events": [
+    {
+      "timestampNanos": 1000000000,
+      "type": "process_killed",
+      "realityRestoredShown": false
+    },
+    {
+      "timestampNanos": 2000000000,
+      "type": "session_unavailable",
+      "realityRestoredShown": true
+    }
+  ]
+}

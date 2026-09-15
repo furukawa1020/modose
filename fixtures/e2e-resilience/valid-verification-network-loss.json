@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "runId": "P050",
+  "testCaseId": "T14",
+  "events": [
+    {
+      "timestampNanos": 1000000000,
+      "type": "network_lost",
+      "realityRestoredShown": false
+    },
+    {
+      "timestampNanos": 1100000000,
+      "type": "verification_waiting",
+      "realityRestoredShown": false
+    }
+  ]
+}
