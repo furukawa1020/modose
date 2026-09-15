@@ -1,0 +1,53 @@
+name: Physical E2E challenge evidence
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/physical-e2e-challenge.yml'
+      - 'api/schemas/physical-e2e-challenge.schema.json'
+      - 'fixtures/e2e-challenge/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/physical-e2e-challenge.yml'
+      - 'api/schemas/physical-e2e-challenge.schema.json'
+      - 'fixtures/e2e-challenge/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: physical-e2e-challenge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validate challenge evidence contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: services/vision-api/go.mod
+          cache: false
+
+      - name: Install pinned JSON Schema validator
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e-challenge"
+          GOBIN="$RUNNER_TEMP/e2e-challenge"             go install github.com/santhosh-tekuri/jsonschema/cmd/jv@v0.7.0
+
+      - name: Validate accepted and rejected evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          validator="$RUNNER_TEMP/e2e-challenge/jv"
+          schema="api/schemas/physical-e2e-challenge.schema.json"
+          "$validator" --quiet             "$schema"             fixtures/e2e-challenge/valid-temporary-occlusion.json
+          if "$validator" --quiet             "$schema"             fixtures/e2e-challenge/invalid-missing-shows-success.json; then
+            echo "invalid missing evidence was accepted" >&2
+            exit 1
+          fi
