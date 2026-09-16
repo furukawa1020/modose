@@ -1,0 +1,38 @@
+name: Physical E2E thresholds
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/physical-e2e-thresholds.yml'
+      - '.github/scripts/evaluate-physical-e2e.py'
+      - '.github/scripts/test_evaluate_physical_e2e.py'
+      - 'evidence/physical-e2e/run-plan-v1.csv'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/physical-e2e-thresholds.yml'
+      - '.github/scripts/evaluate-physical-e2e.py'
+      - '.github/scripts/test_evaluate_physical_e2e.py'
+      - 'evidence/physical-e2e/run-plan-v1.csv'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: physical-e2e-thresholds-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Verify physical E2E threshold evaluator
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate run plan
+        run: python3 .github/scripts/validate-physical-e2e-plan.py
+
+      - name: Test threshold evaluator
+        run: python3 .github/scripts/test_evaluate_physical_e2e.py
