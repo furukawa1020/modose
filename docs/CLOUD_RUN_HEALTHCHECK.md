@@ -6,7 +6,7 @@ Vision APIのデプロイ完了は、Cloud Runがrevisionを作成したこと�
 
 ## エンドポイント
 
-### `GET /healthz`
+### `GET /health`
 
 プロセスのlivenessを確認する。外部サービスへ接続せず、次を返す。
 
@@ -19,11 +19,11 @@ Content-Type: application/json; charset=utf-8
 
 Firebase ID TokenとApp Check Tokenは要求しない。監視とデプロイ検証から利用できる一方、利用者情報、設定値、依存サービス情報は返さない。
 
-### `GET /readyz`
+### `GET /ready`
 
 依存関係を含むreadinessを確認する。probeが利用不能な場合は、型付きの`503 Service Unavailable`を返す。
 
-デプロイ直後のHTTP到達確認には、外部依存の一時障害とプロセス障害を混同しないため`/healthz`を使用する。
+デプロイ直後のHTTP到達確認には、外部依存の一時障害とプロセス障害を混同しないため`/health`を使用する。
 
 ## デプロイ時の判定
 
@@ -53,7 +53,7 @@ revision名、image digest、service URLのデプロイ証拠は、health確認�
 ```sh
 curl --silent --show-error \
   --max-time 10 \
-  "https://SERVICE_URL/healthz"
+  "https://SERVICE_URL/health"
 ```
 
 期待値は次の1行である。
@@ -61,3 +61,9 @@ curl --silent --show-error \
 ```json
 {"status":"ok"}
 ```
+
+## Cloud Run予約パス
+
+Cloud Runでは末尾zの一部パスが予約されているため、公開検査には`/health`・`/ready`を使用する。`/healthz`・`/readyz`は内部probeの互換性用に保持する。
+
+公式資料: https://docs.cloud.google.com/run/docs/known-issues#reserved-url-paths
