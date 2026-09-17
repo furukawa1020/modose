@@ -70,31 +70,37 @@ class AndroidPerformanceGateTest {
     }
 
     @Test
-    fun evaluate_rejectsMissingOrInvalidSamples() {
-        assertEquals(
-            PerformanceGateResult.Rejected(
-                PerformanceGateFailure.InvalidCameraSamples,
-            ),
-            AndroidPerformanceGate.evaluate(
-                measurements(camera = emptyList()),
-            ),
+    fun evaluate_rejectsDirectlyConstructedInvalidBatches() {
+        val valid = measurements()
+        val invalid = listOf(
+            valid.copy(metadata = valid.metadata.copy(
+                buildType = PerformanceBuildType.Debug,
+            )) to PerformanceContractFailure.NonReleaseBuild,
+            valid.copy(endedAtNanos = 0L) to
+                PerformanceContractFailure.InvalidMeasurementWindow,
+            valid.copy(cameraFrameDurations = emptyList()) to
+                PerformanceContractFailure.MissingSamples,
+            valid.copy(memorySamples = emptyList()) to
+                PerformanceContractFailure.MissingSamples,
+            valid.copy(jniDurations = emptyList()) to
+                PerformanceContractFailure.MissingSamples,
+            valid.copy(jniDurations = listOf(
+                DurationSample(4_000_000_000L, 1L),
+            )) to PerformanceContractFailure.TimestampOutsideWindow,
+            valid.copy(jniDurations = listOf(
+                DurationSample(2L, 1L), DurationSample(1L, 1L),
+            )) to PerformanceContractFailure.TimestampNotIncreasing,
         )
-        assertEquals(
-            PerformanceGateResult.Rejected(
-                PerformanceGateFailure.InvalidMemorySamples,
-            ),
-            AndroidPerformanceGate.evaluate(
-                measurements(memory = emptyList()),
-            ),
-        )
-        assertEquals(
-            PerformanceGateResult.Rejected(
-                PerformanceGateFailure.MissingProcessingSamples,
-            ),
-            AndroidPerformanceGate.evaluate(
-                measurements(jni = emptyList()),
-            ),
-        )
+
+        invalid.forEach { (batch, reason) ->
+            assertEquals(
+                PerformanceGateResult.Rejected(
+                    PerformanceGateFailure.InvalidMeasurementContract,
+                    reason,
+                ),
+                AndroidPerformanceGate.evaluate(batch),
+            )
+        }
     }
 
     private fun measurements(
