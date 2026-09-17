@@ -24,7 +24,8 @@ if [[ ! "$request_timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
-health_url="${SERVICE_URL%/}/healthz"
+# Cloud Run reserves some paths ending in z; use the public alias.
+health_url="${SERVICE_URL%/}/health"
 response_file="$(mktemp)"
 trap 'rm -f "$response_file"' EXIT
 
