@@ -21,7 +21,7 @@ data class PerformanceBudgetReport(
 }
 
 enum class PerformanceGateFailure {
-    MissingCameraSamples,
+    InvalidMeasurementContract,
     InvalidCameraSamples,
     InvalidMemorySamples,
     MissingProcessingSamples,
@@ -32,7 +32,10 @@ sealed interface PerformanceGateResult {
     data class Evaluated(val report: PerformanceBudgetReport) :
         PerformanceGateResult
 
-    data class Rejected(val reason: PerformanceGateFailure) :
+    data class Rejected(
+        val reason: PerformanceGateFailure,
+        val contractFailure: PerformanceContractFailure? = null,
+    ) :
         PerformanceGateResult
 }
 
@@ -41,6 +44,29 @@ object AndroidPerformanceGate {
     const val IMAGE_P95_BUDGET_NANOS = 100_000_000L
 
     fun evaluate(
+        measurements: AndroidPerformanceMeasurements,
+    ): PerformanceGateResult {
+        val validated = AndroidPerformanceContract.create(
+            metadata = measurements.metadata,
+            startedAtNanos = measurements.startedAtNanos,
+            endedAtNanos = measurements.endedAtNanos,
+            cameraFrameDurations = measurements.cameraFrameDurations,
+            memorySamples = measurements.memorySamples,
+            jniDurations = measurements.jniDurations,
+            imageProcessingDurations = measurements.imageProcessingDurations,
+        )
+        if (validated is PerformanceContractResult.Rejected) {
+            return PerformanceGateResult.Rejected(
+                PerformanceGateFailure.InvalidMeasurementContract,
+                validated.reason,
+            )
+        }
+        return evaluateValidated(
+            (validated as PerformanceContractResult.Accepted).measurements,
+        )
+    }
+
+    private fun evaluateValidated(
         measurements: AndroidPerformanceMeasurements,
     ): PerformanceGateResult {
         val camera = cameraFromDurations(
