@@ -1,0 +1,21 @@
+name: Cloud Run smoke contract
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/smoke-cloud-run.sh'
+      - '.github/scripts/test_smoke_cloud_run.py'
+      - '.github/workflows/cloud-smoke-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/smoke-cloud-run.sh'
+      - '.github/scripts/test_smoke_cloud_run.py'
+      - '.github/workflows/cloud-smoke-contract.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: python3 .github/scripts/test_smoke_cloud_run.py
