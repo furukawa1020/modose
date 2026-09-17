@@ -45,6 +45,9 @@ func NewRouterWithBaseline(probe ReadinessProbe, analyzer BaselineAnalyzer) *Rou
 
 func NewVisionRouter(probe ReadinessProbe, analyzers VisionAnalyzers) *Router {
 	router := &Router{mux: http.NewServeMux()}
+	// Public probes avoid Cloud Run reserved paths ending in z.
+	router.mux.HandleFunc("/health", getOnly(health))
+	router.mux.HandleFunc("/ready", getOnly(readiness(probe)))
 	router.mux.HandleFunc("/healthz", getOnly(health))
 	router.mux.HandleFunc("/readyz", getOnly(readiness(probe)))
 	router.mux.HandleFunc(
