@@ -3,6 +3,7 @@ package com.modose.app.ar.render
 import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.os.SystemClock
 import android.view.Surface
 import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.plane.HorizontalPlaneState
@@ -10,6 +11,8 @@ import com.modose.app.ar.session.ArCameraFrameFailureReason
 import com.modose.app.ar.session.ArCameraFrameResult
 import com.modose.app.ar.session.ArCameraFrameSource
 import com.modose.app.ar.session.ArTrackingDiagnostics
+import com.modose.app.performance.CameraFpsResult
+import com.modose.app.performance.CameraFrameRecorder
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -35,7 +38,9 @@ class CameraBackgroundSurfaceView(
     private val onHorizontalPlaneState: (HorizontalPlaneState?) -> Unit,
     private val onSceneAnchorState: (SceneAnchorState?) -> Unit,
 ) : GLSurfaceView(context), CameraBackgroundSurfaceController {
+    private val frameRecorder = CameraFrameRecorder()
     private val cameraRenderer = CameraSurfaceRenderer(
+        frameRecorder = frameRecorder,
         displayRotation = { display?.rotation ?: Surface.ROTATION_0 },
         onFailure = { failure -> post { onFailure(failure) } },
         onTrackingDiagnostics = { diagnostics -> post { onTrackingDiagnostics(diagnostics) } },
@@ -61,6 +66,7 @@ class CameraBackgroundSurfaceView(
     override fun onActivityResume() {
         if (released || activityResumed) return
         activityResumed = true
+        queueEvent(frameRecorder::reset)
         onResume()
     }
 
@@ -69,6 +75,10 @@ class CameraBackgroundSurfaceView(
         activityResumed = false
         onPause()
     }
+
+    // Diagnostic reads only: this allocates a snapshot and is not a per-frame API.
+    // The current segment is not evidence that the full performance gate passed.
+    fun cameraFpsSnapshot(): CameraFpsResult = frameRecorder.snapshot()
 
     override fun releaseSurface() {
         if (released) return
@@ -79,6 +89,7 @@ class CameraBackgroundSurfaceView(
 }
 
 private class CameraSurfaceRenderer(
+    private val frameRecorder: CameraFrameRecorder,
     private val displayRotation: () -> Int,
     private val onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
     private val onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
@@ -90,6 +101,7 @@ private class CameraSurfaceRenderer(
     @Volatile
     var frameSource: ArCameraFrameSource? = null
         set(value) {
+            if (field === value) return
             field = value
             boundSource = null
         }
@@ -103,6 +115,7 @@ private class CameraSurfaceRenderer(
     private val anchorStateDeduplicator = SceneAnchorStateDeduplicator()
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        frameRecorder.reset()
         GLES20.glClearColor(0f, 0f, 0f, 1f)
         when (val result = backgroundRenderer.create()) {
             is CameraBackgroundRenderResult.Created -> Unit
@@ -126,8 +139,12 @@ private class CameraSurfaceRenderer(
 
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
-        val source = frameSource ?: return
+        val source = frameSource ?: run {
+            frameRecorder.reset()
+            return
+        }
         if (boundSource !== source) {
+            frameRecorder.reset()
             val createResult = backgroundRenderer.create()
             val textureId = (createResult as? CameraBackgroundRenderResult.Created)?.textureId
                 ?: return failRenderer(createResult)
@@ -166,9 +183,14 @@ private class CameraSurfaceRenderer(
                     }
                 }
                 when (val drawResult = backgroundRenderer.draw(frameResult.frame.timestampNanos)) {
-                    CameraBackgroundRenderResult.Drawn,
-                    CameraBackgroundRenderResult.Skipped,
-                    -> lastFailure = null
+                    CameraBackgroundRenderResult.Drawn -> {
+                        frameRecorder.record(
+                            cameraTimestampNanos = frameResult.frame.timestampNanos,
+                            drawnAtNanos = SystemClock.elapsedRealtimeNanos(),
+                        )
+                        lastFailure = null
+                    }
+                    CameraBackgroundRenderResult.Skipped -> lastFailure = null
                     is CameraBackgroundRenderResult.Rejected -> fail(
                         CameraBackgroundSurfaceFailure.Renderer(drawResult.reason),
                     )
@@ -183,6 +205,7 @@ private class CameraSurfaceRenderer(
     }
 
     fun release() {
+        frameRecorder.reset()
         boundSource = null
         frameSource = null
         backgroundRenderer.release()
