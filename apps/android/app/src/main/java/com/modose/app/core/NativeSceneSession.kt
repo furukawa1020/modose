@@ -13,6 +13,7 @@ internal object NativeSceneBindings {
         handle: Long, token: Long, observedAtMs: Long, overall: Int,
         objectIds: IntArray, verdicts: IntArray,
     ): Int
+    external fun nativeGuidance(handle: Long, nowMs: Long): DoubleArray
     external fun nativeClose(handle: Long)
 }
 
@@ -66,6 +67,16 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
             }
             throw failure
         }
+    }
+
+    /**
+     * Read one current action using the same monotonic clock as frame updates.
+     * Do not cache an arrow across frames or treat null as verified completion.
+     */
+    @Synchronized
+    fun guidance(nowMs: Long): NativeGuidance? = verificationCall {
+        require(nowMs >= 0) { "Invalid guidance timestamp" }
+        decodeNativeGuidance(NativeSceneBindings.nativeGuidance(handle, nowMs))
     }
 
     @Synchronized
