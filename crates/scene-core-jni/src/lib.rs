@@ -7,15 +7,30 @@ use jni::sys::{jint, jlong};
 use jni::JNIEnv;
 use scene_core::frame_ingress::{apply_frame_packet, MAX_FRAME_PACKET_BYTES};
 use scene_core::local_restoration::TablePosition;
-use scene_core::native_runtime::{NativeRuntime, SessionHandle};
+use scene_core::native_runtime::{NativeError, NativeRuntime, SessionHandle};
 use scene_core::restoration_session::RestoreState;
 use scene_core::table_projection::{TablePlane, WorldVector};
 
-static RUNTIME: OnceLock<Mutex<NativeRuntime>> = OnceLock::new();
+mod verification;
+
+#[derive(Default)]
+struct Registry {
+    core: NativeRuntime,
+    verification: verification::VerificationBridge,
+}
+
+impl Registry {
+    fn close(&mut self, handle: SessionHandle) -> Result<(), NativeError> {
+        self.verification.discard(handle);
+        self.core.close(handle)
+    }
+}
+
+static RUNTIME: OnceLock<Mutex<Registry>> = OnceLock::new();
 type Failure = &'static str;
 
-fn runtime() -> &'static Mutex<NativeRuntime> {
-    RUNTIME.get_or_init(|| Mutex::new(NativeRuntime::default()))
+fn runtime() -> &'static Mutex<Registry> {
+    RUNTIME.get_or_init(|| Mutex::new(Registry::default()))
 }
 
 /// Preserve an existing Java exception; never return an error sentinel silently.
@@ -99,7 +114,7 @@ pub extern "system" fn Java_com_modose_app_core_NativeSceneBindings_nativeCreate
         let positions = doubles(env, &positions, count * 2, count * 2)?;
         let targets: Vec<_> = ids_copy.iter().zip(positions.chunks_exact(2))
             .map(|(id, p)| (*id as u32, TablePosition { x: p[0], z: p[1] })).collect();
-        registry.create(plane(&geometry)?, &targets).map(|handle| handle.as_raw())
+        registry.core.create(plane(&geometry)?, &targets).map(|handle| handle.as_raw())
             .map_err(|_| "Native session creation rejected")
     })
 }
@@ -117,9 +132,12 @@ pub extern "system" fn Java_com_modose_app_core_NativeSceneBindings_nativeApply(
             let count = env.get_array_length(&packet).map_err(|_| "Invalid frame array")? as usize;
             if count > MAX_FRAME_PACKET_BYTES { return Err("Frame exceeds size limit"); }
             let bytes = env.convert_byte_array(&packet).map_err(|_| "Frame copy failed")?;
-            apply_frame_packet(&mut registry, handle, now, &bytes).map(state_code)
+            apply_frame_packet(&mut registry.core, handle, now, &bytes).map(state_code)
                 .map_err(|_| "Native frame update rejected")
         })();
+        if !matches!(result, Ok(2)) {
+            registry.verification.discard(handle);
+        }
         if result.is_err() {
             // Includes malformed arrays and invalid clocks before core ingress.
             // This handle is terminal; another session is never touched.
