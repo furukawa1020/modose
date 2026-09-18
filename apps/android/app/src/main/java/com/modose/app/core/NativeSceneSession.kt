@@ -1,0 +1,90 @@
+package com.modose.app.core
+
+/** ABI names are fixed; these instance methods match the Rust JNI exports. */
+internal object NativeSceneBindings {
+    init {
+        System.loadLibrary("scene_core_jni")
+    }
+
+    external fun nativeCreate(geometry: DoubleArray, targetIds: IntArray, targets: DoubleArray): Long
+    external fun nativeApply(handle: Long, observedAtMs: Long, packet: ByteArray): Int
+    external fun nativeClose(handle: Long)
+}
+
+internal enum class CoreRestoreState {
+    GUIDING,
+    AWAITING_VERIFICATION,
+    VERIFYING,
+    VERIFIED,
+    MANUAL_CONFIRMATION;
+
+    companion object {
+        fun fromNative(code: Int): CoreRestoreState = when (code) {
+            0 -> GUIDING
+            1 -> AWAITING_VERIFICATION
+            2 -> VERIFYING
+            3 -> VERIFIED
+            4 -> MANUAL_CONFIRMATION
+            else -> throw IllegalStateException("Unknown native restoration state")
+        }
+    }
+}
+
+/**
+ * Owns one native handle. No automatic finalizer: the AR session owner must close
+ * this object on reset/disposal. Calls are serialized with close; never cache an
+ * old successful state after an exception.
+ */
+internal class NativeSceneSession private constructor(private var handle: Long) : AutoCloseable {
+    private val dispatcher = CoreFrameDispatcher(CoreFrameTransport<CoreRestoreState> { owner, time, bytes ->
+        check(owner == handle && handle > 0) { "Native session is closed" }
+        CoreRestoreState.fromNative(NativeSceneBindings.nativeApply(owner, time, bytes))
+    })
+
+    @Synchronized
+    fun update(
+        observedAtMs: Long,
+        trackingValid: Boolean,
+        detections: List<CoreDetection>,
+        evidence: List<CorePairEvidence>,
+    ): FrameSubmission<CoreRestoreState> {
+        check(handle > 0) { "Native session is closed" }
+        try {
+            return dispatcher.submit(handle, observedAtMs, trackingValid, detections, evidence)
+        } catch (failure: Throwable) {
+            // Native rejection may already have destroyed the handle. Retire
+            // local ownership first and preserve the original failure.
+            try {
+                close()
+            } catch (cleanup: Throwable) {
+                if (cleanup !== failure) failure.addSuppressed(cleanup)
+            }
+            throw failure
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        val owned = handle
+        if (owned == 0L) return
+        handle = 0
+        NativeSceneBindings.nativeClose(owned)
+    }
+
+    companion object {
+        /**
+         * geometry: origin xyz, x-axis xyz, z-axis xyz, 3..64 boundary x/z pairs.
+         * targets: one x/z pair for each saved positive ID.
+         * Inputs must not be concurrently mutated during creation.
+         */
+        fun create(geometry: DoubleArray, targetIds: IntArray, targets: DoubleArray): NativeSceneSession {
+            require(geometry.size in 15..137 && (geometry.size - 9) % 2 == 0)
+            require(targetIds.size in 1..5 && targets.size == targetIds.size * 2)
+            val nativeHandle = NativeSceneBindings.nativeCreate(
+                geometry.copyOf(), targetIds.copyOf(), targets.copyOf(),
+            )
+            check(nativeHandle > 0) { "Native creation returned an invalid handle" }
+            return NativeSceneSession(nativeHandle)
+        }
+    }
+}
