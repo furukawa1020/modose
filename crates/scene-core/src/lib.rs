@@ -11,3 +11,4 @@ pub mod projected_restoration;
 pub mod guidance;
 pub mod pair_confidence;
 pub mod object_assignment;
+pub mod matched_restoration;
