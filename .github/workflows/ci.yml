@@ -79,6 +79,35 @@ jobs:
         shell: bash
         run: bash apps/android/gradlew -p apps/android build --no-daemon
 
+      - name: Verify JNI libraries inside debug and release APKs
+        run: |
+          bash .github/scripts/verify-native-apk.sh \
+            apps/android/app/build/outputs/apk/debug/app-debug.apk \
+            apps/android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Prove missing JNI library is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(mktemp --suffix=.apk)"
+          trap 'rm -f "$apk"' EXIT
+          cp apps/android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          zip -d "$apk" lib/arm64-v8a/libscene_core_jni.so
+          if bash .github/scripts/verify-native-apk.sh "$apk"; then
+            echo "Missing native ABI was not rejected" >&2
+            exit 1
+          fi
+
+      - name: Preserve Android native packaging evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-apks-${{ github.run_id }}
+          path: |
+            apps/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14
+
   rust:
     name: Rust baseline
     needs: changes
