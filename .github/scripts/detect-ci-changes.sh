@@ -22,6 +22,7 @@ while IFS= read -r -d '' file; do
       ;;
     Cargo.toml|Cargo.lock|rust-toolchain.toml|crates/*)
       rust=true
+      android=true
       ;;
     go.work)
       go=true
