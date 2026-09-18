@@ -12,6 +12,7 @@ use scene_core::native_runtime::{NativeError, NativeRuntime, SessionHandle};
 use scene_core::restoration_session::RestoreState;
 use scene_core::table_projection::{TablePlane, WorldVector};
 
+mod guidance;
 mod verification;
 
 #[derive(Default)]
