@@ -89,6 +89,9 @@ jobs:
       - name: Build Rust workspace
         run: cargo build --workspace --locked
 
+      - name: Test Rust workspace
+        run: cargo test --workspace --locked
+
   go:
     name: Go baseline
     needs: changes
