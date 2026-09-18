@@ -70,6 +70,11 @@ jobs:
           java-version: '25'
           cache: gradle
 
+      - name: Set up Android Rust targets and NDK
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+          sdkmanager "ndk;30.0.16248370"
+
       - name: Build Android root
         shell: bash
         run: bash apps/android/gradlew -p apps/android build --no-daemon
@@ -223,6 +228,11 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: gradle
+
+      - name: Set up Android Rust targets and NDK
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+          sdkmanager "ndk;30.0.16248370"
 
       - name: Run reducer and adapter regression suite
         shell: bash
