@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/scene-core"]
+members = ["crates/scene-core", "crates/scene-core-jni"]
 resolver = "3"
 
 [workspace.package]
