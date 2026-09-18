@@ -13,3 +13,4 @@ pub mod pair_confidence;
 pub mod object_assignment;
 pub mod matched_restoration;
 pub mod native_runtime;
+pub mod frame_ingress;
