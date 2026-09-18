@@ -70,6 +70,11 @@ jobs:
           java-version: '25'
           cache: gradle
 
+      - name: Set up Android SDK command-line tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          log-accepted-android-sdk-licenses: false
+
       - name: Set up Android Rust targets and NDK
         run: |
           rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
@@ -257,6 +262,11 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: gradle
+
+      - name: Set up Android SDK command-line tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          log-accepted-android-sdk-licenses: false
 
       - name: Set up Android Rust targets and NDK
         run: |
