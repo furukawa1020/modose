@@ -1,0 +1,64 @@
+name: Native JNI contract
+
+on:
+  pull_request:
+    paths:
+      - 'crates/scene-core/**'
+      - 'crates/scene-core-jni/**'
+      - 'apps/android/app/src/main/java/com/modose/app/core/**'
+      - 'apps/android/gradlew'
+      - 'apps/android/gradle/wrapper/**'
+      - 'tools/native-host-tests/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/native-jni-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/scene-core/**'
+      - 'crates/scene-core-jni/**'
+      - 'apps/android/app/src/main/java/com/modose/app/core/**'
+      - 'apps/android/gradlew'
+      - 'apps/android/gradle/wrapper/**'
+      - 'tools/native-host-tests/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/native-jni-contract.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-jni-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-host:
+    name: Native JNI host contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build real Rust shared library
+        run: cargo build --locked -p scene-core-jni
+      - name: Run production Kotlin against real JNI
+        run: |
+          bash apps/android/gradlew -p tools/native-host-tests test \
+            --no-daemon \
+            -PnativeLibraryDir="$GITHUB_WORKSPACE/target/debug"
+      - name: Preserve native contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-jni-contract-${{ github.run_id }}
+          path: |
+            tools/native-host-tests/build/test-results/test/
+            tools/native-host-tests/build/reports/tests/test/
+          if-no-files-found: error
+          retention-days: 14
