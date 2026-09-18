@@ -8,6 +8,11 @@ internal object NativeSceneBindings {
 
     external fun nativeCreate(geometry: DoubleArray, targetIds: IntArray, targets: DoubleArray): Long
     external fun nativeApply(handle: Long, observedAtMs: Long, packet: ByteArray): Int
+    external fun nativeBeginVerification(handle: Long, observedAtMs: Long): Long
+    external fun nativeCompleteVerification(
+        handle: Long, token: Long, observedAtMs: Long, overall: Int,
+        objectIds: IntArray, verdicts: IntArray,
+    ): Int
     external fun nativeClose(handle: Long)
 }
 
@@ -54,6 +59,58 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
         } catch (failure: Throwable) {
             // Native rejection may already have destroyed the handle. Retire
             // local ownership first and preserve the original failure.
+            try {
+                close()
+            } catch (cleanup: Throwable) {
+                if (cleanup !== failure) failure.addSuppressed(cleanup)
+            }
+            throw failure
+        }
+    }
+
+    @Synchronized
+    fun beginVerification(observedAtMs: Long): NativeVerificationTicket = verificationCall {
+        require(observedAtMs >= 0) { "Invalid verification timestamp" }
+        val token = NativeSceneBindings.nativeBeginVerification(handle, observedAtMs)
+        check(token > 0) { "Native verification returned an invalid token" }
+        NativeVerificationTicket(handle, token)
+    }
+
+    @Synchronized
+    fun completeVerification(
+        ticket: NativeVerificationTicket,
+        observedAtMs: Long,
+        result: NativeVerificationResult,
+    ): CoreRestoreState = verificationCall {
+        require(ticket.owner == handle && ticket.token > 0) { "Verification owner mismatch" }
+        require(observedAtMs >= 0) { "Invalid verification timestamp" }
+        val overall: Int
+        val ids: IntArray
+        val verdicts: IntArray
+        when (result) {
+            NativeVerificationResult.Unavailable -> {
+                overall = 3
+                ids = intArrayOf()
+                verdicts = intArrayOf()
+            }
+            is NativeVerificationResult.Analyzed -> {
+                require(result.objects.size in 1..5) { "Invalid verification object count" }
+                val objects = result.objects.toList()
+                overall = result.overall.wireCode
+                ids = objects.map { it.savedId }.toIntArray()
+                verdicts = objects.map { it.verdict.wireCode }.toIntArray()
+            }
+        }
+        CoreRestoreState.fromNative(NativeSceneBindings.nativeCompleteVerification(
+            handle, ticket.token, observedAtMs, overall, ids, verdicts,
+        ))
+    }
+
+    private inline fun <T> verificationCall(block: () -> T): T {
+        check(handle > 0) { "Native session is closed" }
+        try {
+            return block()
+        } catch (failure: Throwable) {
             try {
                 close()
             } catch (cleanup: Throwable) {
