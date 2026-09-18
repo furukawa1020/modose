@@ -20,7 +20,7 @@ methods=(nativeCreate nativeApply nativeClose nativeBeginVerification nativeComp
 
 for apk in "$@"; do
   [[ -f "$apk" ]] || { echo "APK missing: $apk" >&2; exit 1; }
-  actual="$(unzip -Z1 "$apk" | rg '(^|/)libscene_core_jni\.so$' | LC_ALL=C sort)"
+  actual="$(unzip -Z1 "$apk" | grep -E '(^|/)libscene_core_jni\.so$' | LC_ALL=C sort)"
   [[ "$actual" == "$expected" ]] || { echo "JNI ABI entries differ: $apk" >&2; exit 1; }
   "$zipalign" -c -P 16 4 "$apk"
   for abi in "${abis[@]}"; do
@@ -39,7 +39,7 @@ for apk in "$@"; do
     [[ "${header[4]}" == "$class" && "${header[18]}" == "$machine" ]]
     symbols="$("$nm" --dynamic --defined-only "$library" | awk '{print $NF}')"
     for method in "${methods[@]}"; do
-      rg --quiet --fixed-strings --line-regexp "Java_com_modose_app_core_NativeSceneBindings_$method" <<< "$symbols"
+      grep -q -F -x "Java_com_modose_app_core_NativeSceneBindings_$method" <<< "$symbols"
     done
     alignments="$("$readelf" --program-headers --wide "$library" | awk '$1 == "LOAD" {print $NF}')"
     [[ -n "$alignments" ]]
