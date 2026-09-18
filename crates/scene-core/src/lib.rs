@@ -5,3 +5,4 @@
 #![forbid(unsafe_code)]
 
 pub mod pair_confidence;
+pub mod object_assignment;
