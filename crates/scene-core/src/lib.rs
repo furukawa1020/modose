@@ -6,3 +6,4 @@
 
 pub mod local_restoration;
 pub mod restoration_session;
+pub mod table_projection;
