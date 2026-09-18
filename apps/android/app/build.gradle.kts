@@ -4,7 +4,10 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val rustNdkVersion = "30.0.16248370"
+
 android {
+    ndkVersion = rustNdkVersion
     namespace = "com.modose.app"
     compileSdk = 36
 
@@ -70,4 +73,36 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+}
+
+val rustWorkspace = rootProject.layout.projectDirectory.dir("../..")
+val rustAbis = listOf(
+    Triple("arm64-v8a", "aarch64-linux-android", "aarch64-linux-android"),
+    Triple("armeabi-v7a", "armv7-linux-androideabi", "armv7a-linux-androideabi"),
+    Triple("x86_64", "x86_64-linux-android", "x86_64-linux-android"),
+    Triple("x86", "i686-linux-android", "i686-linux-android"),
+)
+val rustJniTasks = rustAbis.map { (androidAbi, rustTriple, clangTriple) ->
+    tasks.register<BuildRustJni>("buildRustJni" + androidAbi.replace("-", "").replace("_", "")) {
+        abi.set(androidAbi)
+        rustTarget.set(rustTriple)
+        clangTarget.set(clangTriple)
+        apiLevel.set(29)
+        ndkVersion.set(rustNdkVersion)
+        workspace.set(rustWorkspace)
+        ndkDirectory.set(androidComponents.sdkComponents.ndkDirectory)
+        sources.from(fileTree(rustWorkspace.dir("crates")) {
+            include("**/*.rs", "**/Cargo.toml")
+        })
+        sources.from(rustWorkspace.file("Cargo.toml"), rustWorkspace.file("Cargo.lock"),
+            rustWorkspace.file("rust-toolchain.toml"))
+        sources.from(fileTree(rustWorkspace.dir(".cargo")))
+        cargoTargetDirectory.set(layout.buildDirectory.dir("rust-targets/$androidAbi"))
+        outputDirectory.set(layout.buildDirectory.dir("generated/rustJni/$androidAbi"))
+    }
+}
+androidComponents.onVariants { variant ->
+    rustJniTasks.forEach { task ->
+        requireNotNull(variant.sources.jniLibs).addGeneratedSourceDirectory(task, BuildRustJni::outputDirectory)
+    }
 }
