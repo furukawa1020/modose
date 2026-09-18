@@ -5,3 +5,4 @@
 #![forbid(unsafe_code)]
 
 pub mod local_restoration;
+pub mod restoration_session;
