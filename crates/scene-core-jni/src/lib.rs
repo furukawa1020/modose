@@ -5,7 +5,8 @@ use std::sync::{Mutex, OnceLock};
 use jni::objects::{JByteArray, JDoubleArray, JIntArray, JObject};
 use jni::sys::{jint, jlong};
 use jni::JNIEnv;
-use scene_core::frame_ingress::{apply_frame_packet, MAX_FRAME_PACKET_BYTES};
+use scene_core::frame_ingress::{apply_frame_packet, FrameIngressError, MAX_FRAME_PACKET_BYTES};
+use scene_core::matched_restoration::FrameError;
 use scene_core::local_restoration::TablePosition;
 use scene_core::native_runtime::{NativeError, NativeRuntime, SessionHandle};
 use scene_core::restoration_session::RestoreState;
@@ -132,8 +133,18 @@ pub extern "system" fn Java_com_modose_app_core_NativeSceneBindings_nativeApply(
             let count = env.get_array_length(&packet).map_err(|_| "Invalid frame array")? as usize;
             if count > MAX_FRAME_PACKET_BYTES { return Err("Frame exceeds size limit"); }
             let bytes = env.convert_byte_array(&packet).map_err(|_| "Frame copy failed")?;
-            apply_frame_packet(&mut registry.core, handle, now, &bytes).map(state_code)
-                .map_err(|_| "Native frame update rejected")
+            match apply_frame_packet(&mut registry.core, handle, now, &bytes) {
+                Ok(state) => Ok(state_code(state)),
+                Err(FrameIngressError::Runtime(NativeError::Frame(
+                    FrameError::TrackingUnavailable,
+                ))) => {
+                    // The core already cleared local/verification evidence.
+                    // Tracking loss is recoverable within this AR session.
+                    registry.core.state(handle, now).map(state_code)
+                        .map_err(|_| "Native session unavailable after tracking loss")
+                }
+                Err(_) => Err("Native frame update rejected"),
+            }
         })();
         if !matches!(result, Ok(2)) {
             registry.verification.discard(handle);
