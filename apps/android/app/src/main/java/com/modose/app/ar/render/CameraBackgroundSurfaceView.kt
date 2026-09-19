@@ -4,6 +4,11 @@ import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.view.Surface
+import com.modose.app.ar.anchor.SceneAnchorSnapshot
+import com.modose.app.core.NativeGuideGeometry
+import com.modose.app.core.NativeWorldFrameSnapshot
+import com.modose.app.ar.session.ArCameraFrame
+import com.modose.app.ar.session.ArTrackingPhase
 import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.plane.HorizontalPlaneState
 import com.modose.app.ar.session.ArCameraFrameFailureReason
@@ -51,6 +56,21 @@ class CameraBackgroundSurfaceView(
             cameraRenderer.frameSource = value
         }
 
+    /**
+     * The producer supplies its own core observation clock; camera timestamps
+     * are not assumed to share its origin. No native work is done on the UI thread.
+     */
+    internal fun publishGuidance(
+        source: ArCameraFrameSource,
+        anchor: SceneAnchorSnapshot,
+        snapshot: NativeWorldFrameSnapshot,
+        monotonicMillis: () -> Long,
+    ): Boolean {
+        if (released || frameSource !== source) return false
+        cameraRenderer.guideBinding = GuideOverlayBinding(source, anchor, snapshot, monotonicMillis)
+        return true
+    }
+
     init {
         setEGLContextClientVersion(2)
         preserveEGLContextOnPause = true
@@ -65,6 +85,7 @@ class CameraBackgroundSurfaceView(
     }
 
     override fun onActivityPause() {
+        cameraRenderer.guideBinding = null
         if (!activityResumed) return
         activityResumed = false
         onPause()
@@ -78,6 +99,13 @@ class CameraBackgroundSurfaceView(
     }
 }
 
+private data class GuideOverlayBinding(
+    val source: ArCameraFrameSource,
+    val anchor: SceneAnchorSnapshot,
+    val snapshot: NativeWorldFrameSnapshot,
+    val monotonicMillis: () -> Long,
+)
+
 private class CameraSurfaceRenderer(
     private val displayRotation: () -> Int,
     private val onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
@@ -86,10 +114,15 @@ private class CameraSurfaceRenderer(
     private val onSceneAnchorState: (SceneAnchorState?) -> Unit,
 ) : GLSurfaceView.Renderer {
     private val backgroundRenderer = CameraBackgroundRenderer()
+    private val guideRenderer = GuideOverlayRenderer()
+
+    @Volatile
+    var guideBinding: GuideOverlayBinding? = null
 
     @Volatile
     var frameSource: ArCameraFrameSource? = null
         set(value) {
+            if (field !== value) guideBinding = null
             field = value
             boundSource = null
         }
@@ -114,6 +147,10 @@ private class CameraSurfaceRenderer(
                     CameraBackgroundFailureReason.GlOperationFailed,
                 ),
             )
+        }
+        guideBinding = null
+        if (!guideRenderer.create()) {
+            fail(CameraBackgroundSurfaceFailure.Renderer(CameraBackgroundFailureReason.GlOperationFailed))
         }
         boundSource = null
     }
@@ -166,23 +203,52 @@ private class CameraSurfaceRenderer(
                     }
                 }
                 when (val drawResult = backgroundRenderer.draw(frameResult.frame.timestampNanos)) {
-                    CameraBackgroundRenderResult.Drawn,
-                    CameraBackgroundRenderResult.Skipped,
-                    -> lastFailure = null
+                    CameraBackgroundRenderResult.Drawn -> {
+                        if (drawGuidance(source, frameResult.frame)) lastFailure = null
+                    }
+                    CameraBackgroundRenderResult.Skipped -> lastFailure = null
                     is CameraBackgroundRenderResult.Rejected -> fail(
                         CameraBackgroundSurfaceFailure.Renderer(drawResult.reason),
                     )
                     else -> Unit
                 }
             }
-            is ArCameraFrameResult.Rejected -> fail(
-                CameraBackgroundSurfaceFailure.Frame(frameResult.reason),
-            )
+            is ArCameraFrameResult.Rejected -> {
+                guideBinding = null
+                fail(CameraBackgroundSurfaceFailure.Frame(frameResult.reason))
+            }
             else -> Unit
         }
     }
 
+    private fun drawGuidance(source: ArCameraFrameSource, frame: ArCameraFrame): Boolean {
+        val binding = guideBinding ?: return true
+        val anchor = (frame.sceneAnchorState as? SceneAnchorState.Tracking)?.anchor
+        if (frame.trackingDiagnostics.phase != ArTrackingPhase.Tracking ||
+            binding.source !== source || anchor == null ||
+            anchor.id != binding.anchor.id || anchor.pose != binding.anchor.pose
+        ) {
+            guideBinding = null
+            return true
+        }
+        val view = frame.viewMatrix ?: return true
+        val projection = frame.projectionMatrix ?: return true
+        val success = try {
+            val presentation = binding.snapshot.presentationAt(binding.monotonicMillis())
+            guideRenderer.draw(NativeGuideGeometry.build(presentation), view, projection)
+        } catch (_: RuntimeException) {
+            false
+        }
+        if (!success) {
+            guideBinding = null
+            fail(CameraBackgroundSurfaceFailure.Renderer(CameraBackgroundFailureReason.GlOperationFailed))
+        }
+        return success
+    }
+
     fun release() {
+        guideBinding = null
+        guideRenderer.release()
         boundSource = null
         frameSource = null
         backgroundRenderer.release()
