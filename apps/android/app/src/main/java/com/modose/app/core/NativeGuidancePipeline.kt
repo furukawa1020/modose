@@ -80,6 +80,22 @@ internal class NativeGuidancePipeline private constructor(
     }
 
     @Synchronized
+    fun submitImage(capture: NativeImageCapture, result: NativeImageRecognition): NativeImageSubmission {
+        if (capture.epoch !== epoch || result.epoch !== epoch) {
+            return NativeImageSubmission(NativeImageProjectionError.FOREIGN_STREAM,
+                drop(NativeFrameDropReason.FOREIGN_STREAM))
+        }
+        return when (val projected = capture.project(result)) {
+            is NativeImageProjection.Projected -> NativeImageSubmission(null, submit(
+                NativeRecognitionFrame(epoch, capture.observedAtMs, true, projected.detections, result.evidence),
+            ))
+            is NativeImageProjection.Rejected -> NativeImageSubmission(projected.reason, submit(
+                NativeRecognitionFrame(epoch, capture.observedAtMs, false, emptyList(), emptyList()),
+            ))
+        }
+    }
+
+    @Synchronized
     fun beginVerification(owner: NativeGuidanceEpoch): NativeVerificationTicket =
         verify(owner) { now -> session.beginVerification(now) }
 
