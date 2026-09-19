@@ -1,6 +1,9 @@
 package com.modose.app.ar.render
 
 import android.content.Context
+import android.os.Looper
+import com.modose.app.core.NativeGuidancePipeline
+import com.modose.app.core.NativeGuidanceSink
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.view.Surface
@@ -47,14 +50,50 @@ class CameraBackgroundSurfaceView(
         onHorizontalPlaneState = { state -> post { onHorizontalPlaneState(state) } },
         onSceneAnchorState = { state -> post { onSceneAnchorState(state) } },
     )
+    @Volatile
     private var activityResumed = false
+    @Volatile
     private var released = false
+    private var guidancePipeline: NativeGuidancePipeline? = null
 
     var frameSource: ArCameraFrameSource?
         get() = cameraRenderer.frameSource
         set(value) {
+            if (cameraRenderer.frameSource !== value) stopGuidance()
             cameraRenderer.frameSource = value
         }
+
+    /**
+     * Called by the scene owner on the UI thread after saving geometry/targets.
+     * Inference completions may then call pipeline.submit on a worker thread.
+     */
+    internal fun startGuidance(
+        sceneId: String,
+        source: ArCameraFrameSource,
+        anchor: SceneAnchorSnapshot,
+        geometry: DoubleArray,
+        targetIds: IntArray,
+        targets: DoubleArray,
+        monotonicMillis: () -> Long,
+    ): NativeGuidancePipeline {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Guidance start requires UI thread" }
+        check(!released && activityResumed && frameSource === source) { "Camera surface is unavailable" }
+        stopGuidance()
+        return NativeGuidancePipeline.open(
+            sceneId, geometry, targetIds, targets, monotonicMillis,
+            NativeGuidanceSink { snapshot ->
+                publishGuidance(source, anchor, snapshot, monotonicMillis)
+            },
+        ).also { guidancePipeline = it }
+    }
+
+    internal fun stopGuidance() {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Guidance stop requires UI thread" }
+        val owned = guidancePipeline
+        guidancePipeline = null
+        cameraRenderer.guideBinding = null
+        owned?.close()
+    }
 
     /**
      * The producer supplies its own core observation clock; camera timestamps
@@ -66,7 +105,7 @@ class CameraBackgroundSurfaceView(
         snapshot: NativeWorldFrameSnapshot,
         monotonicMillis: () -> Long,
     ): Boolean {
-        if (released || frameSource !== source) return false
+        if (released || !activityResumed || frameSource !== source) return false
         cameraRenderer.guideBinding = GuideOverlayBinding(source, anchor, snapshot, monotonicMillis)
         return true
     }
@@ -85,7 +124,7 @@ class CameraBackgroundSurfaceView(
     }
 
     override fun onActivityPause() {
-        cameraRenderer.guideBinding = null
+        stopGuidance()
         if (!activityResumed) return
         activityResumed = false
         onPause()
@@ -94,6 +133,7 @@ class CameraBackgroundSurfaceView(
     override fun releaseSurface() {
         if (released) return
         released = true
+        stopGuidance()
         queueEvent(cameraRenderer::release)
         onActivityPause()
     }
