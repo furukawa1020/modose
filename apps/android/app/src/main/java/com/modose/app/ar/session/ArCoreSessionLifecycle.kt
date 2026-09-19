@@ -111,6 +111,12 @@ private class AndroidArSessionRuntime(
         val horizontalPlaneState = updateHorizontalPlaneState(frame, widthPx, heightPx)
         val cpuImageResult = acquireCpuImage(frame)
         return ArCameraFrame(
+            viewMatrix = if (frame.camera.trackingState == TrackingState.TRACKING) {
+                FloatArray(16).also { frame.camera.getViewMatrix(it, 0) }
+            } else null,
+            projectionMatrix = if (frame.camera.trackingState == TrackingState.TRACKING) {
+                FloatArray(16).also { frame.camera.getProjectionMatrix(it, 0, 0.05f, 100f) }
+            } else null,
             timestampNanos = frame.timestamp,
             transformedTextureCoordinates = transformedCoordinates,
             trackingDiagnostics = ArTrackingDiagnosticsPolicy.resolve(
