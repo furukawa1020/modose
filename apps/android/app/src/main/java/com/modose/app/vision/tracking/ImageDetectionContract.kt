@@ -1,6 +1,8 @@
 package com.modose.app.vision.tracking
 
 import com.modose.app.core.NativeImageCapture
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /** Pixel coordinates in the original, unrotated CPU image. IDs are not scene object IDs. */
 internal data class DetectedImageObject(
@@ -27,32 +29,36 @@ internal fun interface ImageDetectionSink {
 
 /** No queued frames. Publication and close are serialized so close revokes late results. */
 internal class DetectionFlight {
+    private val lock = ReentrantLock()
     private var closed = false
     private var busy = false
 
-    @Synchronized
+    /** Called from GL: never wait for publication, close, or another producer. */
     fun acquire(): Boolean {
-        if (closed || busy) return false
-        busy = true
-        return true
+        if (!lock.tryLock()) return false
+        try {
+            if (closed || busy) return false
+            busy = true
+            return true
+        } finally {
+            lock.unlock()
+        }
     }
 
     /** Returns true when resources can be disposed. Callback exceptions still release the slot. */
-    @Synchronized
-    fun finish(publish: () -> Unit): Boolean {
+    fun finish(publish: () -> Unit): Boolean = lock.withLock {
         check(busy)
         try {
             if (!closed) publish()
         } finally {
             busy = false
         }
-        return closed
+        closed
     }
 
     /** An in-flight detector must be disposed only after its completion callback. */
-    @Synchronized
-    fun close(): Boolean {
+    fun close(): Boolean = lock.withLock {
         closed = true
-        return !busy
+        !busy
     }
 }
