@@ -153,7 +153,7 @@ class NativeImageCaptureContractTest {
     }
 
     @Test
-    fun_delayedRecognitionCannotBypassThePipelineAgeGate() {
+    fun delayedRecognitionCannotBypassThePipelineAgeGate() {
         NativeGuidancePipeline.open("scene", tableGeometry(), intArrayOf(1), doubleArrayOf(0.0, 0.0),
             { 300L }, NativeGuidanceSink { error("must not publish") }).use { p ->
             assertEquals(NativeFrameProcessing.Dropped(NativeFrameDropReason.STALE),
