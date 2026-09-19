@@ -42,6 +42,8 @@ internal enum class CoreRestoreState {
  * old successful state after an exception.
  */
 internal class NativeSceneSession private constructor(private var handle: Long) : AutoCloseable {
+    private var latestFrame: NativeFrameSnapshot? = null
+
     private val dispatcher = CoreFrameDispatcher(CoreFrameTransport<CoreRestoreState> { owner, time, bytes ->
         check(owner == handle && handle > 0) { "Native session is closed" }
         CoreRestoreState.fromNative(NativeSceneBindings.nativeApply(owner, time, bytes))
@@ -54,6 +56,7 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
         detections: List<CoreDetection>,
         evidence: List<CorePairEvidence>,
     ): FrameSubmission<CoreRestoreState> {
+        invalidatePresentation()
         check(handle > 0) { "Native session is closed" }
         try {
             return dispatcher.submit(handle, observedAtMs, trackingValid, detections, evidence)
@@ -70,6 +73,36 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
     }
 
     /**
+     * The same monitor protects apply, guidance, publication, verification and
+     * close. Inputs must not be concurrently mutated by their producers.
+     */
+    @Synchronized
+    fun updateGuidance(
+        observedAtMs: Long,
+        trackingValid: Boolean,
+        detections: List<CoreDetection>,
+        evidence: List<CorePairEvidence>,
+    ): NativeFrameSnapshot {
+        val applied = update(observedAtMs, trackingValid, detections, evidence)
+        val presentation = when (applied) {
+            is FrameSubmission.Invalidated -> NativeFramePresentation.Hidden(
+                NativeFrameHiddenReason.INVALID_INPUT, applied.reason,
+            )
+            is FrameSubmission.Applied -> if (!trackingValid) {
+                NativeFramePresentation.Hidden(NativeFrameHiddenReason.TRACKING_LOST)
+            } else {
+                NativeFramePresentation.Ready(applied.state, guidance(observedAtMs))
+            }
+        }
+        return NativeFrameSnapshot(observedAtMs, presentation).also { latestFrame = it }
+    }
+
+    private fun invalidatePresentation() {
+        latestFrame?.invalidate()
+        latestFrame = null
+    }
+
+    /**
      * Read one current action using the same monotonic clock as frame updates.
      * Do not cache an arrow across frames or treat null as verified completion.
      */
@@ -81,6 +114,7 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
 
     @Synchronized
     fun beginVerification(observedAtMs: Long): NativeVerificationTicket = verificationCall {
+        invalidatePresentation()
         require(observedAtMs >= 0) { "Invalid verification timestamp" }
         val token = NativeSceneBindings.nativeBeginVerification(handle, observedAtMs)
         check(token > 0) { "Native verification returned an invalid token" }
@@ -93,6 +127,7 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
         observedAtMs: Long,
         result: NativeVerificationResult,
     ): CoreRestoreState = verificationCall {
+        invalidatePresentation()
         require(ticket.owner == handle && ticket.token > 0) { "Verification owner mismatch" }
         require(observedAtMs >= 0) { "Invalid verification timestamp" }
         val overall: Int
@@ -133,6 +168,7 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
 
     @Synchronized
     override fun close() {
+        invalidatePresentation()
         val owned = handle
         if (owned == 0L) return
         handle = 0
