@@ -41,7 +41,10 @@ internal enum class CoreRestoreState {
  * this object on reset/disposal. Calls are serialized with close; never cache an
  * old successful state after an exception.
  */
-internal class NativeSceneSession private constructor(private var handle: Long) : AutoCloseable {
+internal class NativeSceneSession private constructor(
+    private var handle: Long,
+    private val worldBasis: NativeWorldBasis,
+) : AutoCloseable {
     private var latestFrame: NativeFrameSnapshot? = null
 
     private val dispatcher = CoreFrameDispatcher(CoreFrameTransport<CoreRestoreState> { owner, time, bytes ->
@@ -96,6 +99,17 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
         }
         return NativeFrameSnapshot(observedAtMs, presentation).also { latestFrame = it }
     }
+
+    /** Same-session world geometry for a renderer; still subject to frame expiry. */
+    @Synchronized
+    fun updateWorldGuidance(
+        observedAtMs: Long,
+        trackingValid: Boolean,
+        detections: List<CoreDetection>,
+        evidence: List<CorePairEvidence>,
+    ): NativeWorldFrameSnapshot = NativeWorldFrameSnapshot(
+        updateGuidance(observedAtMs, trackingValid, detections, evidence), worldBasis,
+    )
 
     private fun invalidatePresentation() {
         latestFrame?.invalidate()
@@ -184,11 +198,13 @@ internal class NativeSceneSession private constructor(private var handle: Long) 
         fun create(geometry: DoubleArray, targetIds: IntArray, targets: DoubleArray): NativeSceneSession {
             require(geometry.size in 15..137 && (geometry.size - 9) % 2 == 0)
             require(targetIds.size in 1..5 && targets.size == targetIds.size * 2)
+            val geometryCopy = geometry.copyOf()
+            val worldBasis = NativeWorldBasis.fromGeometry(geometryCopy)
             val nativeHandle = NativeSceneBindings.nativeCreate(
-                geometry.copyOf(), targetIds.copyOf(), targets.copyOf(),
+                geometryCopy, targetIds.copyOf(), targets.copyOf(),
             )
             check(nativeHandle > 0) { "Native creation returned an invalid handle" }
-            return NativeSceneSession(nativeHandle)
+            return NativeSceneSession(nativeHandle, worldBasis)
         }
     }
 }
