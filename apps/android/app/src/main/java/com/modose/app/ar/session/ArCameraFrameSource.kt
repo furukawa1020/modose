@@ -23,6 +23,9 @@ data class ArCameraFrame(
         ImageViewTransformFrameResult.Unavailable(
             ImageViewTransformUnavailableReason.SourceImageUnavailable,
         ),
+    /** Column-major OpenGL matrices; unavailable while camera tracking is lost. */
+    val viewMatrix: FloatArray? = null,
+    val projectionMatrix: FloatArray? = null,
 )
 
 enum class ArTrackingPhase {
