@@ -5,7 +5,10 @@ plugins {
 kotlin {
     jvmToolchain(17)
     sourceSets.named("main") {
-        kotlin.srcDir("../../apps/android/app/src/main/java/com/modose/app/core")
+        kotlin.srcDir("../../apps/android/app/src/main/java")
+        kotlin.include("com/modose/app/core/**")
+        kotlin.include("com/modose/app/vision/tracking/ImageDetectionContract.kt")
+        kotlin.include("com/modose/app/vision/tracking/ImageGuidanceBridge.kt")
     }
 }
 
