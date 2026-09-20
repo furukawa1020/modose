@@ -9,6 +9,8 @@ kotlin {
         kotlin.include("com/modose/app/core/**")
         kotlin.include("com/modose/app/vision/tracking/ImageDetectionContract.kt")
         kotlin.include("com/modose/app/vision/tracking/ImageGuidanceBridge.kt")
+        kotlin.include("com/modose/app/vision/tracking/MeasuredAppearance.kt")
+        kotlin.include("com/modose/app/vision/tracking/MeasuredGuidanceEvidenceSource.kt")
     }
 }
 
