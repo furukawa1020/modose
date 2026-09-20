@@ -8,6 +8,12 @@ import com.modose.app.ar.image.CpuImageAcquisitionResult
 import com.modose.app.core.NativeImageCapture
 import com.modose.app.core.NativeGuidancePipeline
 import com.modose.app.core.NativeGuidanceSink
+import com.modose.app.core.NativeFrameDropReason
+import com.modose.app.core.NativeFrameProcessing
+import com.modose.app.vision.tracking.GuidanceImageEvidenceSource
+import com.modose.app.vision.tracking.ImageDetectionSink
+import com.modose.app.vision.tracking.ImageGuidanceBridge
+import com.modose.app.vision.tracking.MlKitImageDetector
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.view.Surface
@@ -53,12 +59,17 @@ class CameraBackgroundSurfaceView(
         onTrackingDiagnostics = { diagnostics -> post { onTrackingDiagnostics(diagnostics) } },
         onHorizontalPlaneState = { state -> post { onHorizontalPlaneState(state) } },
         onSceneAnchorState = { state -> post { onSceneAnchorState(state) } },
+        onRecognitionFailure = { binding ->
+            post {
+                if (recognitionSession === binding) stopGuidance() else binding.close()
+            }
+        },
     )
     @Volatile
     private var activityResumed = false
     @Volatile
     private var released = false
-    private var guidancePipeline: NativeGuidancePipeline? = null
+    private var recognitionSession: RecognitionCaptureBinding? = null
 
     var frameSource: ArCameraFrameSource?
         get() = cameraRenderer.frameSource
@@ -67,15 +78,7 @@ class CameraBackgroundSurfaceView(
             cameraRenderer.frameSource = value
         }
 
-    /** The consumer must enqueue recognition and return immediately; this runs on GL. */
-    internal var onRecognitionFrame: ((NativeImageCapture, CpuCameraImage) -> Unit)?
-        get() = cameraRenderer.onRecognitionFrame
-        set(value) { cameraRenderer.onRecognitionFrame = value }
-
-    /**
-     * Called by the scene owner on the UI thread after saving geometry/targets.
-     * Inference completions may then call pipeline.submit on a worker thread.
-     */
+    /** Called by the scene owner on UI after saving geometry/targets and preparing evidence. */
     internal fun startGuidance(
         sceneId: String,
         source: ArCameraFrameSource,
@@ -84,25 +87,33 @@ class CameraBackgroundSurfaceView(
         targetIds: IntArray,
         targets: DoubleArray,
         monotonicMillis: () -> Long,
+        evidenceSource: GuidanceImageEvidenceSource,
     ): NativeGuidancePipeline {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Guidance start requires UI thread" }
         check(!released && activityResumed && frameSource === source) { "Camera surface is unavailable" }
         stopGuidance()
-        return NativeGuidancePipeline.open(
-            sceneId, geometry, targetIds, targets, monotonicMillis,
+        val savedIds = targetIds.copyOf()
+        val pipeline = NativeGuidancePipeline.open(
+            sceneId, geometry, savedIds, targets, monotonicMillis,
             NativeGuidanceSink { snapshot ->
                 publishGuidance(source, anchor, snapshot, monotonicMillis)
             },
-        ).also {
-            guidancePipeline = it
-            cameraRenderer.recognitionBinding = RecognitionCaptureBinding(it, monotonicMillis)
+        )
+        val binding = try {
+            RecognitionCaptureBinding(source, anchor, pipeline, monotonicMillis, savedIds, evidenceSource)
+        } catch (failure: RuntimeException) {
+            pipeline.close()
+            throw failure
         }
+        recognitionSession = binding
+        cameraRenderer.recognitionBinding = binding
+        return pipeline
     }
 
     internal fun stopGuidance() {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Guidance stop requires UI thread" }
-        val owned = guidancePipeline
-        guidancePipeline = null
+        val owned = recognitionSession
+        recognitionSession = null
         cameraRenderer.recognitionBinding = null
         cameraRenderer.guideBinding = null
         owned?.close()
@@ -153,11 +164,41 @@ class CameraBackgroundSurfaceView(
 }
 
 private class RecognitionCaptureBinding(
+    val source: ArCameraFrameSource,
+    val anchor: SceneAnchorSnapshot,
     val pipeline: NativeGuidancePipeline,
     val monotonicMillis: () -> Long,
-) {
+    savedIds: IntArray,
+    evidenceSource: GuidanceImageEvidenceSource,
+) : AutoCloseable {
+    private val bridge = ImageGuidanceBridge(pipeline, savedIds, evidenceSource)
+    private val detector = MlKitImageDetector.create(ImageDetectionSink { capture, result ->
+        val delivery = try {
+            bridge.process(capture, result)
+        } catch (_: RuntimeException) {
+            close()
+            return@ImageDetectionSink
+        }
+        val processing = delivery.processing
+        if (processing is NativeFrameProcessing.Failed ||
+            (processing is NativeFrameProcessing.Dropped && processing.reason == NativeFrameDropReason.CLOSED)
+        ) close()
+    })
+
     // Accessed only on the GL thread.
     var lastImageTimestamp = 0L
+
+    fun submit(capture: NativeImageCapture, image: CpuCameraImage) {
+        if (capture.epoch === pipeline.epoch) detector.submit(capture, image)
+    }
+
+    override fun close() {
+        try {
+            pipeline.close()
+        } finally {
+            detector.close()
+        }
+    }
 }
 
 private data class GuideOverlayBinding(
@@ -173,6 +214,7 @@ private class CameraSurfaceRenderer(
     private val onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
     private val onHorizontalPlaneState: (HorizontalPlaneState?) -> Unit,
     private val onSceneAnchorState: (SceneAnchorState?) -> Unit,
+    private val onRecognitionFailure: (RecognitionCaptureBinding) -> Unit,
 ) : GLSurfaceView.Renderer {
     private val backgroundRenderer = CameraBackgroundRenderer()
     private val guideRenderer = GuideOverlayRenderer()
@@ -182,9 +224,6 @@ private class CameraSurfaceRenderer(
 
     @Volatile
     var recognitionBinding: RecognitionCaptureBinding? = null
-
-    @Volatile
-    var onRecognitionFrame: ((NativeImageCapture, CpuCameraImage) -> Unit)? = null
 
     @Volatile
     var frameSource: ArCameraFrameSource? = null
@@ -273,7 +312,7 @@ private class CameraSurfaceRenderer(
                     CameraBackgroundRenderResult.Drawn -> {
                         if (drawGuidance(source, frameResult.frame)) {
                             lastFailure = null
-                            dispatchRecognition(frameResult.frame)
+                            dispatchRecognition(source, frameResult.frame)
                         }
                     }
                     CameraBackgroundRenderResult.Skipped -> lastFailure = null
@@ -291,9 +330,12 @@ private class CameraSurfaceRenderer(
         }
     }
 
-    private fun dispatchRecognition(frame: ArCameraFrame) {
+    private fun dispatchRecognition(source: ArCameraFrameSource, frame: ArCameraFrame) {
         val binding = recognitionBinding ?: return
-        val consumer = onRecognitionFrame ?: return
+        val anchor = (frame.sceneAnchorState as? SceneAnchorState.Tracking)?.anchor
+        if (binding.source !== source || anchor == null ||
+            anchor.id != binding.anchor.id || anchor.pose != binding.anchor.pose
+        ) return
         val image = (frame.cpuImageResult as? CpuImageAcquisitionResult.Acquired)?.image ?: return
         if (image.timestampNanos <= binding.lastImageTimestamp) return
         try {
@@ -301,11 +343,12 @@ private class CameraSurfaceRenderer(
                 frame, binding.pipeline.epoch, binding.monotonicMillis(),
             ) ?: return
             binding.lastImageTimestamp = image.timestampNanos
-            consumer(capture, image)
+            binding.submit(capture, image)
         } catch (_: RuntimeException) {
             recognitionBinding = null
             guideBinding = null
-            try { binding.pipeline.close() } catch (_: RuntimeException) { }
+            // Closing may serialize with publication; keep that wait off the GL thread.
+            onRecognitionFailure(binding)
             fail(CameraBackgroundSurfaceFailure.Renderer(CameraBackgroundFailureReason.GlOperationFailed))
         }
     }
@@ -337,7 +380,6 @@ private class CameraSurfaceRenderer(
 
     fun release() {
         recognitionBinding = null
-        onRecognitionFrame = null
         guideBinding = null
         guideRenderer.release()
         boundSource = null
