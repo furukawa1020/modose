@@ -12,7 +12,7 @@ import org.junit.Test
 
 class CpuMeasuredEvidenceContractTest {
     @Test
-    fun sameImageEvidenceReachesNativeVerification() = Fixture().use { f ->
+    fun sameImageEvidenceReachesNativeVerification(): Unit = Fixture().use { f ->
         for (time in 0L..800L step 100L) {
             f.now = time
             val capture = f.capture(time)
@@ -31,7 +31,7 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun imageIsUnavailableOutsideScopeAndAfterNormalReturn() = Fixture().use { f ->
+    fun imageIsUnavailableOutsideScopeAndAfterNormalReturn(): Unit = Fixture().use { f ->
         val observation = f.observation()
         assertNull(f.source.resolve(observation))
         assertNotNull(f.resolve(observation))
@@ -39,7 +39,7 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun throwingActionReleasesImageScope() = Fixture().use { f ->
+    fun throwingActionReleasesImageScope(): Unit = Fixture().use { f ->
         assertThrows(IllegalStateException::class.java) {
             f.source.withImage(f.image()) { error("action failed") }
         }
@@ -48,7 +48,7 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun nestedScopeIsRejectedWithoutDiscardingOuterImage() = Fixture().use { f ->
+    fun nestedScopeIsRejectedWithoutDiscardingOuterImage(): Unit = Fixture().use { f ->
         f.source.withImage(f.image()) {
             assertThrows(IllegalStateException::class.java) {
                 f.source.withImage(f.image()) { Unit }
@@ -58,28 +58,28 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun wrongTimestampDoesNotReadSemanticsOrOpenModel() = Fixture().use { f ->
+    fun wrongTimestampDoesNotReadSemanticsOrOpenModel(): Unit = Fixture().use { f ->
         f.semanticReader = { error("must not read") }
         assertNull(f.source.withImage(f.image(2L)) { f.source.resolve(f.observation()) })
         assertEquals(0, f.opens)
     }
 
     @Test
-    fun missingSemanticsDoesNotOpenModel() = Fixture().use { f ->
+    fun missingSemanticsDoesNotOpenModel(): Unit = Fixture().use { f ->
         f.semanticReader = { null }
         assertNull(f.resolve())
         assertEquals(0, f.opens)
     }
 
     @Test
-    fun equivalentButForeignSemanticObservationIsRejected() = Fixture().use { f ->
+    fun equivalentButForeignSemanticObservationIsRejected(): Unit = Fixture().use { f ->
         f.semanticReader = { semantic(GuidanceImageObservation(it.capture, it.objects)) }
         assertNull(f.resolve())
         assertEquals(0, f.opens)
     }
 
     @Test
-    fun startupFailureIsRememberedWithoutRepeatedModelOpen() = Fixture().use { f ->
+    fun startupFailureIsRememberedWithoutRepeatedModelOpen(): Unit = Fixture().use { f ->
         f.openResult = { AppearanceExtractorOpen.Rejected(AppearanceExtractionFailure.MODEL_UNAVAILABLE) }
         repeat(2) {
             assertNull(f.resolve())
@@ -90,14 +90,14 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun extractionRejectionReturnsNoEvidence() = Fixture().use { f ->
+    fun extractionRejectionReturnsNoEvidence(): Unit = Fixture().use { f ->
         f.engine.result = { _, _ -> AppearanceExtractionResult.Rejected(AppearanceExtractionFailure.INFERENCE) }
         assertNull(f.resolve())
         assertEquals(AppearanceExtractionFailure.INFERENCE, f.source.lastFailure)
     }
 
     @Test
-    fun wrongExtractionTimestampIsRejected() = Fixture().use { f ->
+    fun wrongExtractionTimestampIsRejected(): Unit = Fixture().use { f ->
         f.engine.result = { image, box ->
             AppearanceExtractionResult.Extracted(image.timestampNanos + 1, box, appearance())
         }
@@ -106,7 +106,7 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun wrongExtractionBoxIsRejected() = Fixture().use { f ->
+    fun wrongExtractionBoxIsRejected(): Unit = Fixture().use { f ->
         f.engine.result = { image, _ ->
             AppearanceExtractionResult.Extracted(image.timestampNanos, DetectedImageObject(0, 0, 0, 20, 20), appearance())
         }
@@ -115,7 +115,7 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun extractorExceptionInvalidatesBridgeAndReleasesScope() = Fixture().use { f ->
+    fun extractorExceptionInvalidatesBridgeAndReleasesScope(): Unit = Fixture().use { f ->
         f.engine.result = { _, _ -> error("inference failed") }
         val delivery = f.source.withImage(f.image()) {
             f.bridge.process(f.capture(0), ImageDetectionResult.Detected(listOf(BOX)))
@@ -127,7 +127,7 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun secondObjectFailureDoesNotReturnPartialEvidence() = Fixture().use { f ->
+    fun secondObjectFailureDoesNotReturnPartialEvidence(): Unit = Fixture().use { f ->
         val second = DetectedImageObject(1, 10, 10, 20, 20)
         val observation = GuidanceImageObservation(f.capture(0),
             listOf(GuidanceImageObject(1, BOX), GuidanceImageObject(2, second)))
@@ -140,7 +140,7 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun closeRunsOnceOnOwnerAndPreventsFurtherUse() = Fixture().use { f ->
+    fun closeRunsOnceOnOwnerAndPreventsFurtherUse(): Unit = Fixture().use { f ->
         assertNotNull(f.resolve())
         f.source.close()
         f.source.close()
@@ -153,7 +153,7 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun wrongWorkerCannotEnterOrCloseOwnedSource() = Fixture().use { f ->
+    fun wrongWorkerCannotEnterOrCloseOwnedSource(): Unit = Fixture().use { f ->
         assertNotNull(f.resolve())
         val worker = Executors.newSingleThreadExecutor()
         try {
@@ -172,14 +172,14 @@ class CpuMeasuredEvidenceContractTest {
     }
 
     @Test
-    fun closeBeforeFirstUseDoesNotOpenModel() = Fixture().use { f ->
+    fun closeBeforeFirstUseDoesNotOpenModel(): Unit = Fixture().use { f ->
         f.source.close()
         assertEquals(0, f.opens)
         assertEquals(0, f.engine.closes)
     }
 
     @Test
-    fun explicitEmptyObservationDoesNotLoadModel() = Fixture().use { f ->
+    fun explicitEmptyObservationDoesNotLoadModel(): Unit = Fixture().use { f ->
         val observation = GuidanceImageObservation(f.capture(0), emptyList())
         assertNotNull(f.resolve(observation))
         assertEquals(0, f.opens)
