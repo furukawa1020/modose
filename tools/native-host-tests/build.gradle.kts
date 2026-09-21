@@ -12,6 +12,8 @@ kotlin {
         kotlin.include("com/modose/app/vision/tracking/MeasuredAppearance.kt")
         kotlin.include("com/modose/app/vision/tracking/MeasuredGuidanceEvidenceSource.kt")
         kotlin.include("com/modose/app/vision/tracking/CpuObjectCropper.kt")
+        kotlin.include("com/modose/app/vision/tracking/AppearanceExtractionContract.kt")
+        kotlin.include("com/modose/app/vision/tracking/CpuMeasuredEvidenceSource.kt")
         kotlin.include("com/modose/app/ar/image/CpuCameraImageContract.kt")
     }
 }
