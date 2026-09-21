@@ -55,7 +55,17 @@ class CameraBackgroundSurfaceView(
     private val onHorizontalPlaneState: (HorizontalPlaneState?) -> Unit,
     private val onSceneAnchorState: (SceneAnchorState?) -> Unit,
 ) : GLSurfaceView(context), CameraBackgroundSurfaceController {
+    private val baselineCapture = BaselineCaptureMailbox()
+
+    internal fun requestBaselineFrame(consumer: (BaselineCameraFrame?) -> Unit): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        return !released && activityResumed && baselineCapture.request(consumer)
+    }
+
+    internal fun cancelBaselineCapture() = baselineCapture.cancel()
+
     private val cameraRenderer = CameraSurfaceRenderer(
+        baselineCapture = baselineCapture,
         displayRotation = { display?.rotation ?: Surface.ROTATION_0 },
         onFailure = { failure -> post { onFailure(failure) } },
         onTrackingDiagnostics = { diagnostics -> post { onTrackingDiagnostics(diagnostics) } },
@@ -76,7 +86,10 @@ class CameraBackgroundSurfaceView(
     var frameSource: ArCameraFrameSource?
         get() = cameraRenderer.frameSource
         set(value) {
-            if (cameraRenderer.frameSource !== value) stopGuidance()
+            if (cameraRenderer.frameSource !== value) {
+                baselineCapture.cancel()
+                stopGuidance()
+            }
             cameraRenderer.frameSource = value
         }
 
@@ -150,6 +163,7 @@ class CameraBackgroundSurfaceView(
     }
 
     override fun onActivityPause() {
+        baselineCapture.cancel()
         stopGuidance()
         if (!activityResumed) return
         activityResumed = false
@@ -221,6 +235,7 @@ private data class GuideOverlayBinding(
 )
 
 private class CameraSurfaceRenderer(
+    private val baselineCapture: BaselineCaptureMailbox,
     private val displayRotation: () -> Int,
     private val onFailure: (CameraBackgroundSurfaceFailure) -> Unit,
     private val onTrackingDiagnostics: (ArTrackingDiagnostics?) -> Unit,
@@ -324,6 +339,7 @@ private class CameraSurfaceRenderer(
                     CameraBackgroundRenderResult.Drawn -> {
                         if (drawGuidance(source, frameResult.frame)) {
                             lastFailure = null
+                            baselineCapture.offer(frameResult.frame)
                             dispatchRecognition(source, frameResult.frame)
                         }
                     }
