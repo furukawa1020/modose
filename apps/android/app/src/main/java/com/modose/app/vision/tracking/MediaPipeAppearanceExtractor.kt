@@ -11,34 +11,15 @@ import com.modose.app.ar.image.CpuCameraImage
 import java.io.IOException
 import java.security.MessageDigest
 
-internal enum class AppearanceExtractionFailure {
-    WRONG_THREAD, CLOSED, INVALID_IMAGE, INVALID_OUTPUT, INFERENCE,
-    INVALID_MODEL, MODEL_UNAVAILABLE, HASH_MISMATCH, MODEL_INITIALIZATION,
-}
-
-internal sealed interface AppearanceExtractionResult {
-    data class Extracted(
-        val imageTimestampNanos: Long,
-        val box: DetectedImageObject,
-        val appearance: MeasuredAppearance,
-    ) : AppearanceExtractionResult
-    data class Rejected(val reason: AppearanceExtractionFailure) : AppearanceExtractionResult
-}
-
-internal sealed interface AppearanceExtractorOpen {
-    data class Opened(val extractor: MediaPipeAppearanceExtractor) : AppearanceExtractorOpen
-    data class Rejected(val reason: AppearanceExtractionFailure) : AppearanceExtractorOpen
-}
-
 /** Create, extract, and close on one dedicated worker. Never call from UI or GL. */
 internal class MediaPipeAppearanceExtractor private constructor(
     private val embedder: ImageEmbedder,
     private val modelId: String,
     private val owner: Thread,
-) : AutoCloseable {
+) : AppearanceExtractor {
     private var closed = false
 
-    fun extract(image: CpuCameraImage, box: DetectedImageObject): AppearanceExtractionResult {
+    override fun extract(image: CpuCameraImage, box: DetectedImageObject): AppearanceExtractionResult {
         if (Thread.currentThread() !== owner) return reject(AppearanceExtractionFailure.WRONG_THREAD)
         if (closed) return reject(AppearanceExtractionFailure.CLOSED)
         val converted = CpuObjectCropper.crop(image, box)
