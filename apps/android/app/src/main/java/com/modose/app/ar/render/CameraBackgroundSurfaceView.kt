@@ -11,7 +11,9 @@ import com.modose.app.core.NativeGuidanceSink
 import com.modose.app.core.NativeFrameDropReason
 import com.modose.app.core.NativeFrameProcessing
 import com.modose.app.vision.tracking.GuidanceImageEvidenceSource
-import com.modose.app.vision.tracking.ImageDetectionSink
+import com.modose.app.vision.tracking.CpuImageDetectionSink
+import com.modose.app.vision.tracking.CpuImageEvidenceSource
+import com.modose.app.vision.tracking.ImageDetectionResult
 import com.modose.app.vision.tracking.ImageGuidanceBridge
 import com.modose.app.vision.tracking.MlKitImageDetector
 import android.opengl.GLES20
@@ -172,17 +174,27 @@ private class RecognitionCaptureBinding(
     evidenceSource: GuidanceImageEvidenceSource,
 ) : AutoCloseable {
     private val bridge = ImageGuidanceBridge(pipeline, savedIds, evidenceSource)
-    private val detector = MlKitImageDetector.create(ImageDetectionSink { capture, result ->
-        val delivery = try {
-            bridge.process(capture, result)
-        } catch (_: RuntimeException) {
-            close()
-            return@ImageDetectionSink
+    private val detector = MlKitImageDetector.create(object : CpuImageDetectionSink {
+        override fun accept(capture: NativeImageCapture, image: CpuCameraImage, result: ImageDetectionResult) {
+            val delivery = try {
+                if (evidenceSource is CpuImageEvidenceSource) {
+                    evidenceSource.withImage(image) { bridge.process(capture, result) }
+                } else {
+                    bridge.process(capture, result)
+                }
+            } catch (_: RuntimeException) {
+                this@RecognitionCaptureBinding.close()
+                return
+            }
+            val processing = delivery.processing
+            if (processing is NativeFrameProcessing.Failed ||
+                (processing is NativeFrameProcessing.Dropped && processing.reason == NativeFrameDropReason.CLOSED)
+            ) this@RecognitionCaptureBinding.close()
         }
-        val processing = delivery.processing
-        if (processing is NativeFrameProcessing.Failed ||
-            (processing is NativeFrameProcessing.Dropped && processing.reason == NativeFrameDropReason.CLOSED)
-        ) close()
+
+        override fun close() {
+            if (evidenceSource is CpuImageEvidenceSource) evidenceSource.close()
+        }
     })
 
     // Accessed only on the GL thread.
