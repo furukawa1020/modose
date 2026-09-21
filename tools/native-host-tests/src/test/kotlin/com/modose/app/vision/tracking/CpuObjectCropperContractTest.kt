@@ -105,7 +105,7 @@ class CpuObjectCropperContractTest {
     }
 
     @Test
-    funHugeStridesCannotWrapIntoTheByteArray() {
+    fun hugeStridesCannotWrapIntoTheByteArray() {
         val source = image(2, 2)
         val huge = source.planes[0].copy(rowStride = Int.MAX_VALUE, pixelStride = Int.MAX_VALUE)
         assertPlaneFailure(source.copy(planes = listOf(huge, source.planes[1], source.planes[2])))
