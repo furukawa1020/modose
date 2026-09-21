@@ -46,13 +46,13 @@ internal class MlKitImageDetector private constructor(
             image.widthPx <= 0 || image.heightPx <= 0 ||
             image.widthPx.toLong() * image.heightPx > MAX_PIXELS
         ) {
-            finish(capture, ImageDetectionResult.Failed(DetectionFailure.INVALID_IMAGE))
+            finish(capture, image, ImageDetectionResult.Failed(DetectionFailure.INVALID_IMAGE))
             return
         }
         val task = try {
             val converted = Yuv420ToNv21Converter.convert(image)
             if (converted !is Nv21ConversionResult.Converted) {
-                finish(capture, ImageDetectionResult.Failed(DetectionFailure.CONVERSION))
+                finish(capture, image, ImageDetectionResult.Failed(DetectionFailure.CONVERSION))
                 return
             }
             val nv21 = converted.image
@@ -60,7 +60,7 @@ internal class MlKitImageDetector private constructor(
                 nv21.bytes, nv21.widthPx, nv21.heightPx, 0, InputImage.IMAGE_FORMAT_NV21,
             ))
         } catch (_: RuntimeException) {
-            finish(capture, ImageDetectionResult.Failed(DetectionFailure.DETECTOR))
+            finish(capture, image, ImageDetectionResult.Failed(DetectionFailure.DETECTOR))
             return
         }
         task.addOnCompleteListener(worker) { completed ->
@@ -81,13 +81,16 @@ internal class MlKitImageDetector private constructor(
                 // Includes model download failures and cancelled tasks; never treat as an empty scene.
                 ImageDetectionResult.Failed(DetectionFailure.DETECTOR)
             }
-            finish(capture, result)
+            finish(capture, image, result)
         }
     }
 
-    private fun finish(capture: NativeImageCapture, result: ImageDetectionResult) {
+    private fun finish(capture: NativeImageCapture, image: CpuCameraImage, result: ImageDetectionResult) {
         val release = try {
-            flight.finish { sink.accept(capture, result) }
+            flight.finish {
+                if (sink is CpuImageDetectionSink) sink.accept(capture, image, result)
+                else sink.accept(capture, result)
+            }
         } catch (_: RuntimeException) {
             // A broken consumer terminates this stream, without logging scene data.
             flight.close()
@@ -101,19 +104,16 @@ internal class MlKitImageDetector private constructor(
 
     private fun dispose() {
         if (!disposed.compareAndSet(false, true)) return
-        try {
-            worker.execute {
+        // Only this method shuts the executor down; accepted inference finishes first.
+        worker.execute {
+            try {
+                if (sink is CpuImageDetectionSink) sink.close()
+            } finally {
                 try {
                     detector.close()
                 } finally {
                     worker.shutdown()
                 }
-            }
-        } catch (_: RejectedExecutionException) {
-            try {
-                detector.close()
-            } finally {
-                worker.shutdown()
             }
         }
     }
