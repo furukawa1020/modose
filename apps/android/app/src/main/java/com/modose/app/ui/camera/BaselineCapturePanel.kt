@@ -85,6 +85,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                         val operation = currentCoroutineContext()
                         runtime.confirm(reviewing, objects) { operation.ensureActive() }
                     }
+                    reviewing.validity.requireCurrent()
                     prepared = result
                     review = null
                 }
@@ -120,10 +121,12 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                             if (!accepted && continuation.isActive) continuation.resumeWithException(
                                 BaselineCaptureRejected("カメラは使用できません。"))
                         }
-                        review = withContext(dispatcher) {
+                        val result = withContext(dispatcher) {
                             val operation = currentCoroutineContext()
                             runtime.analyze(packet) { operation.ensureActive() }
                         }
+                        result.validity.requireCurrent()
+                        review = result
                     }
                 }) { Text("撮影して解析") }
             }

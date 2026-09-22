@@ -252,7 +252,7 @@ private fun CameraBackgroundHost(
             Box(Modifier.fillMaxSize()) {
                 CameraLiveStatus(trackingDiagnostics, horizontalPlaneState, sceneAnchorState)
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                    key(frameSource) {
+                    key(frameSource, (sceneAnchorState as? SceneAnchorState.Tracking)?.anchor?.id) {
                         BaselineCapturePanel(view, available =
                             trackingDiagnostics?.phase == ArTrackingPhase.Tracking &&
                             trackingDiagnostics.issue == ArTrackingIssue.None &&

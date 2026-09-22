@@ -320,6 +320,8 @@ private class CameraSurfaceRenderer(
             heightPx = heightPx,
         )) {
             is ArCameraFrameResult.Updated -> {
+                if (source !== frameSource) return
+                baselineCapture.observe(frameResult.frame)
                 if (diagnosticsDeduplicator.shouldEmit(frameResult.frame.trackingDiagnostics)) {
                     onTrackingDiagnostics(frameResult.frame.trackingDiagnostics)
                 }
@@ -407,6 +409,7 @@ private class CameraSurfaceRenderer(
     }
 
     fun release() {
+        baselineCapture.cancel()
         recognitionBinding = null
         guideBinding = null
         guideRenderer.release()
@@ -428,6 +431,7 @@ private class CameraSurfaceRenderer(
     }
 
     private fun fail(failure: CameraBackgroundSurfaceFailure) {
+        baselineCapture.cancel()
         if (failure == lastFailure) return
         lastFailure = failure
         onFailure(failure)
