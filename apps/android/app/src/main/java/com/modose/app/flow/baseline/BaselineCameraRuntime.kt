@@ -11,6 +11,7 @@ import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.coordinates.*
 import com.modose.app.ar.image.*
 import com.modose.app.ar.render.BaselineCameraFrame
+import com.modose.app.ar.render.BaselineCaptureValidity
 import com.modose.app.network.*
 import com.modose.app.network.baseline.BaselineObject
 import com.modose.app.vision.quality.*
@@ -26,6 +27,7 @@ import kotlin.math.*
 internal class BaselineCaptureRejected(message: String) : RuntimeException(message)
 
 internal data class BaselineImageReview(
+    val validity: BaselineCaptureValidity,
     val image: CpuCameraImage,
     val plan: VlmImageEncodingPlan,
     val reviewing: BaselineFlowState.ReviewingBaseline,
@@ -34,7 +36,12 @@ internal data class BaselineImageReview(
 /** Blocking boundary: every method runs on the dedicated capture worker. */
 internal class BaselineCameraRuntime(private val context: Context) {
     fun analyze(packet: BaselineCameraFrame, checkActive: () -> Unit): BaselineImageReview {
-        checkActive()
+        val validity = packet.validity ?: fail("撮影時のアンカーを確認できません。撮り直してください。")
+        fun checkCurrent() {
+            checkActive()
+            if (!validity.isCurrent) fail("撮影時のアンカーが失効しました。撮り直してください。")
+        }
+        checkCurrent()
         val frame = packet.frame
         val image = (frame.cpuImageResult as? CpuImageAcquisitionResult.Acquired)?.image
             ?: fail("カメラ画像を取得できません。撮り直してください。")
@@ -85,36 +92,40 @@ internal class BaselineCameraRuntime(private val context: Context) {
             ?: fail("解析画像を準備できません。")
         val settings = settings()
         // Validate the actual model before paying for a cloud analysis request.
-        extractor().use { checkActive() }
+        extractor().use { checkCurrent() }
         val encoded = (VlmJpegEncoder().encode(image, plan) as? VlmJpegEncodingResult.Encoded)?.image
             ?: fail("解析画像を生成できません。")
-        checkActive()
+        checkCurrent()
         val firebase = firebase(settings)
         val auth = FirebaseAuth.getInstance(firebase)
         if (auth.currentUser == null) {
             Tasks.await(auth.signInAnonymously(), 2, TimeUnit.SECONDS)
         }
-        checkActive()
+        checkCurrent()
         val client = AuthenticatedVisionApiClient(settings.getProperty("apiBaseUrl"), "0.1.0",
             FirebaseIdTokenProvider(auth), FirebaseAppCheckTokenProvider(FirebaseAppCheck.getInstance(firebase)))
         val capture = BaselineCapture(UUID.randomUUID().toString(), Instant.now(),
             UUID.randomUUID().toString(), encoded)
         val flow = BaselineAnalysisUseCase(executeRequest = { request ->
-            checkActive()
+            checkCurrent()
             client.execute(request)
         })
         val result = flow.analyze(capture)
-        checkActive()
+        checkCurrent()
         if (result !is BaselineRunResult.Completed) fail("画像解析に失敗しました。認証・通信・対象物を確認してください。")
-        return BaselineImageReview(image, plan, BaselineFlowState.ReviewingBaseline(capture, result.analysis))
+        return BaselineImageReview(validity, image, plan, BaselineFlowState.ReviewingBaseline(capture, result.analysis))
     }
 
     fun confirm(review: BaselineImageReview, objects: List<BaselineObject>, checkActive: () -> Unit): MeasuredBaseline {
-        checkActive()
+        fun checkCurrent() {
+            checkActive()
+            if (!review.validity.isCurrent) fail("撮影時のアンカーが失効しました。撮り直してください。")
+        }
+        checkCurrent()
         val result = extractor().use { engine ->
             BaselineAppearanceBuilder.build(review.reviewing.capture.sceneId, review.image, review.plan, objects, engine)
         }
-        checkActive()
+        checkCurrent()
         return (result as? BaselineAppearanceResult.Built)?.baseline
             ?: fail("物体の特徴を取得できません。保存せず撮り直してください。")
     }
