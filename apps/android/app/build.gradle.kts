@@ -146,7 +146,7 @@ val prepareEmbedderModel by tasks.registering {
         target.writeBytes(bytes)
     }
 }
-android.sourceSets.getByName("main").assets.srcDir(embedderAssets)
+android.sourceSets.getByName("main").assets.srcDir(embedderAssets.get().asFile)
 tasks.named("preBuild").configure { dependsOn(prepareEmbedderModel) }
 
 // Config directory is provided outside the repository; each variant supplies its own Firebase app.
