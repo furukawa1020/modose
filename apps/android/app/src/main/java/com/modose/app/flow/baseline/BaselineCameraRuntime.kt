@@ -130,7 +130,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
         val properties = Properties()
         try {
             context.assets.open("modose-runtime.properties").use { input ->
-                val bytes = input.readBounded(8192)
+                val bytes = input.readBaselineSettings(8192)
                 bytes.inputStream().use { properties.load(it) }
             }
             val uri = URI(properties.getProperty("apiBaseUrl", ""))
@@ -147,7 +147,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
 
     private fun firebase(settings: Properties): FirebaseApp = synchronized(FIREBASE_LOCK) {
         FirebaseApp.getApps(context).firstOrNull { it.name == FIREBASE_NAME }?.let { return@synchronized it }
-        val bytes = context.assets.open("google-services.json").use { it.readBounded(65536) }
+        val bytes = context.assets.open("google-services.json").use { it.readBaselineSettings(65536) }
         val json = JSONObject(bytes.toString(Charsets.UTF_8))
         val clients = json.getJSONArray("client")
         val client = (0 until clients.length()).map { clients.getJSONObject(it) }.firstOrNull {
@@ -165,20 +165,6 @@ internal class BaselineCameraRuntime(private val context: Context) {
         app
     }
 
-    private fun java.io.InputStream.readBounded(maximumBytes: Int): ByteArray {
-        val output = java.io.ByteArrayOutputStream()
-        val buffer = ByteArray(8192)
-        while (true) {
-            val count = read(buffer)
-            if (count < 0) break
-            if (count > maximumBytes - output.size()) {
-                fail("設定ファイルがサイズ制限を超えています。")
-            }
-            output.write(buffer, 0, count)
-        }
-        return output.toByteArray()
-    }
-
     private fun fail(message: String): Nothing = throw BaselineCaptureRejected(message)
 
     companion object {
@@ -188,3 +174,18 @@ internal class BaselineCameraRuntime(private val context: Context) {
         private val FIREBASE_LOCK = Any()
     }
 }
+
+internal fun java.io.InputStream.readBaselineSettings(maximumBytes: Int): ByteArray {
+    val output = java.io.ByteArrayOutputStream()
+    val buffer = ByteArray(8192)
+    while (true) {
+        val count = read(buffer)
+        if (count < 0) break
+        if (count > maximumBytes - output.size()) {
+            throw BaselineCaptureRejected("設定ファイルがサイズ制限を超えています。")
+        }
+        output.write(buffer, 0, count)
+    }
+    return output.toByteArray()
+}
+
