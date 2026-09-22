@@ -1,3 +1,7 @@
+import java.io.ByteArrayOutputStream
+import java.net.URI
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -106,5 +110,48 @@ val rustJniTasks = rustAbis.map { (androidAbi, rustTriple, clangTriple) ->
 androidComponents.onVariants { variant ->
     rustJniTasks.forEach { task ->
         requireNotNull(variant.sources.jniLibs).addGeneratedSourceDirectory(task, BuildRustJni::outputDirectory)
+    }
+}
+
+val embedderAssets = layout.buildDirectory.dir("generated/embedderAssets")
+val prepareEmbedderModel by tasks.registering {
+    val expectedSha = "bbbb4c51a55a53905af1daec995ca1aae355046f8839bb8c9f5ce9271394bc40"
+    val modelUrl = "https://storage.googleapis.com/mediapipe-models/image_embedder/" +
+        "mobilenet_v3_small/float32/1/mobilenet_v3_small.tflite"
+    inputs.property("modelUrl", modelUrl)
+    inputs.property("sha256", expectedSha)
+    outputs.dir(embedderAssets)
+    doLast {
+        val connection = URI(modelUrl).toURL().openConnection().apply {
+            connectTimeout = 15_000
+            readTimeout = 30_000
+        }
+        val bytes = connection.getInputStream().use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                check(output.size() + count <= 4_117_670) { "Unexpected model size" }
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        }
+        check(bytes.size == 4_117_670) { "Incomplete model download" }
+        val actual = MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        check(actual == expectedSha) { "Embedding model SHA-256 mismatch" }
+        val target = embedderAssets.get().file("models/mobilenet_v3_small.tflite").asFile
+        target.parentFile.mkdirs()
+        target.writeBytes(bytes)
+    }
+}
+android.sourceSets.getByName("main").assets.srcDir(embedderAssets)
+tasks.named("preBuild").configure { dependsOn(prepareEmbedderModel) }
+
+// Config directory is provided outside the repository; each variant supplies its own Firebase app.
+providers.gradleProperty("modoseRuntimeConfigDir").orNull?.let { directory ->
+    listOf("debug", "release").forEach { variant ->
+        android.sourceSets.getByName(variant).assets.srcDir(file(directory).resolve(variant))
     }
 }
