@@ -108,3 +108,22 @@ androidComponents.onVariants { variant ->
         requireNotNull(variant.sources.jniLibs).addGeneratedSourceDirectory(task, BuildRustJni::outputDirectory)
     }
 }
+
+val prepareEmbedderModel = tasks.register<PrepareEmbedderModel>("prepareEmbedderModel") {
+    modelUrl.set("https://storage.googleapis.com/mediapipe-models/image_embedder/" +
+        "mobilenet_v3_small/float32/1/mobilenet_v3_small.tflite")
+    expectedSha256.set("bbbb4c51a55a53905af1daec995ca1aae355046f8839bb8c9f5ce9271394bc40")
+    expectedBytes.set(4_117_670)
+    outputDirectory.set(layout.buildDirectory.dir("generated/embedderAssets"))
+}
+androidComponents.onVariants { variant ->
+    requireNotNull(variant.sources.assets).addGeneratedSourceDirectory(
+        prepareEmbedderModel, PrepareEmbedderModel::outputDirectory)
+}
+
+// Config directory is provided outside the repository; each variant supplies its own Firebase app.
+providers.gradleProperty("modoseRuntimeConfigDir").orNull?.let { directory ->
+    listOf("debug", "release").forEach { variant ->
+        android.sourceSets.getByName(variant).assets.srcDir(file(directory).resolve(variant))
+    }
+}
