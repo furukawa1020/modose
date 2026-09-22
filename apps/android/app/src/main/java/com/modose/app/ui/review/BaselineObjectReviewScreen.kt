@@ -48,6 +48,7 @@ fun BaselineObjectReviewScreen(
     onConfirmed: (List<BaselineObject>) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    confirmationLabel: String = "この内容で保存",
 ) {
     val captureImage = reviewing.capture.image
     val bitmap = remember(captureImage) {
@@ -218,7 +219,7 @@ fun BaselineObjectReviewScreen(
                 enabled = reviewState.canConfirm && !selectingManualBox,
                 modifier = Modifier.weight(1f),
             ) {
-                Text("この内容で保存")
+                Text(confirmationLabel)
             }
         }
     }

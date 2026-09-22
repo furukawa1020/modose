@@ -1,5 +1,7 @@
 package com.modose.app.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import com.modose.app.di.AppContainer
@@ -27,6 +30,9 @@ import com.modose.app.ar.session.ArTrackingDiagnostics
 import com.modose.app.ar.render.CameraBackgroundSurfaceController
 import com.modose.app.ar.render.CameraBackgroundSurfaceFailure
 import com.modose.app.ar.render.CameraBackgroundSurfaceView
+import com.modose.app.ui.camera.BaselineCapturePanel
+import com.modose.app.ar.session.ArTrackingPhase
+import com.modose.app.ar.session.ArTrackingIssue
 import com.modose.app.ui.camera.CameraLiveStatus
 import com.modose.app.ui.camera.CameraOverlayHost
 import com.modose.app.permission.CameraPermissionState
@@ -242,7 +248,20 @@ private fun CameraBackgroundHost(
                 update = { it.frameSource = frameSource },
             )
         },
-        overlay = { CameraLiveStatus(trackingDiagnostics, horizontalPlaneState, sceneAnchorState) },
+        overlay = {
+            Box(Modifier.fillMaxSize()) {
+                CameraLiveStatus(trackingDiagnostics, horizontalPlaneState, sceneAnchorState)
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                    key(frameSource) {
+                        BaselineCapturePanel(view, available =
+                            trackingDiagnostics?.phase == ArTrackingPhase.Tracking &&
+                            trackingDiagnostics.issue == ArTrackingIssue.None &&
+                            horizontalPlaneState is HorizontalPlaneState.Tracking &&
+                            sceneAnchorState is SceneAnchorState.Tracking)
+                    }
+                }
+            }
+        },
     )
 }
 
