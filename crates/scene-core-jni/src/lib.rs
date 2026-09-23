@@ -13,6 +13,7 @@ use scene_core::restoration_session::RestoreState;
 use scene_core::table_projection::{TablePlane, WorldVector};
 
 mod guidance;
+mod projection;
 mod verification;
 
 #[derive(Default)]
