@@ -6,6 +6,7 @@ import com.modose.app.ar.coordinates.ImageViewTransformUnavailableReason
 import com.modose.app.ar.image.CpuImageAcquisitionResult
 import com.modose.app.ar.image.CpuImageRuntimeSkipReason
 import com.modose.app.ar.plane.HorizontalPlaneState
+import com.modose.app.ar.plane.CapturedTableGeometry
 
 data class ArCameraFrame(
     val timestampNanos: Long,
@@ -26,6 +27,7 @@ data class ArCameraFrame(
     /** Column-major OpenGL matrices; unavailable while camera tracking is lost. */
     val viewMatrix: FloatArray? = null,
     val projectionMatrix: FloatArray? = null,
+    val tableGeometry: CapturedTableGeometry? = null,
 )
 
 enum class ArTrackingPhase {
