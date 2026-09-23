@@ -13,7 +13,6 @@ import com.modose.app.ar.render.BaselineCameraFrame
 import com.modose.app.ar.render.CameraBackgroundSurfaceView
 import com.modose.app.flow.baseline.*
 import com.modose.app.ui.review.BaselineObjectReviewScreen
-import com.modose.app.vision.tracking.MeasuredBaseline
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -33,7 +32,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var review by remember { mutableStateOf<BaselineImageReview?>(null) }
-    var prepared by remember { mutableStateOf<MeasuredBaseline?>(null) }
+    var prepared by remember { mutableStateOf<PreparedBaseline?>(null) }
 
     fun reset() {
         savedSession?.close()
@@ -91,7 +90,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                         runtime.confirm(reviewing, objects) { operation.ensureActive() }
                     }
                     reviewing.validity.requireCurrent()
-                    val write = BaselineSnapshotWriteFactory.create(reviewing, result, objects)
+                    val write = BaselineSnapshotWriteFactory.create(reviewing, result.measured, objects)
                     val owner = snapshots.openSession()
                     savedSession = owner
                     var published = false
@@ -121,12 +120,12 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(when {
                 busy -> "画像を処理しています"
-                prepared != null -> "画像と物体情報を端末に保存しました（" + prepared!!.appearances.size + "個）"
+                prepared != null -> "画像と物体情報を端末に保存しました（" + prepared!!.targets.size + "個）"
                 !available -> "平面と追跡が安定するまで待ってください"
                 else -> "机の状態を撮影して解析します"
             })
             if (prepared != null) {
-                Text("実座標の保存・復元開始はまだ行っていません。画面終了時に画像を削除します。")
+                Text("全物体の目標座標をこのARセッション内に準備しました。復元操作はまだ開始していません。画面終了時に画像と目標を破棄します。")
                 Button(onClick = ::reset) { Text("削除して撮り直す") }
             } else {
                 Text("操作すると撮影画像を解析APIへ送信します。")
