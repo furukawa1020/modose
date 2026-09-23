@@ -22,6 +22,8 @@ import kotlinx.coroutines.*
 @Composable
 internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: Boolean) {
     val context = LocalContext.current.applicationContext
+    val snapshots = remember(context) { AndroidBaselineSnapshots.get(context) }
+    var savedSession by remember { mutableStateOf<BaselineSnapshotSession?>(null) }
     val runtime = remember(context) { BaselineCameraRuntime(context) }
     val dispatcher = remember { Executors.newSingleThreadExecutor { task ->
         Thread(task, "modose-baseline")
@@ -34,6 +36,8 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     var prepared by remember { mutableStateOf<MeasuredBaseline?>(null) }
 
     fun reset() {
+        savedSession?.close()
+        savedSession = null
         job?.cancel()
         view.cancelBaselineCapture()
         review = null
@@ -42,6 +46,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     }
     DisposableEffect(view, dispatcher) {
         onDispose {
+            savedSession?.close()
             job?.cancel()
             view.cancelBaselineCapture()
             dispatcher.close()
@@ -86,25 +91,43 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                         runtime.confirm(reviewing, objects) { operation.ensureActive() }
                     }
                     reviewing.validity.requireCurrent()
-                    prepared = result
-                    review = null
+                    val write = BaselineSnapshotWriteFactory.create(reviewing, result, objects)
+                    val owner = snapshots.openSession()
+                    savedSession = owner
+                    var published = false
+                    try {
+                        when (owner.save(write) { reviewing.validity.isCurrent }) {
+                            BaselineSnapshotSave.Saved -> Unit
+                            BaselineSnapshotSave.Rejected ->
+                                throw BaselineCaptureRejected("端末に保存できませんでした。撮り直してください。")
+                            BaselineSnapshotSave.CleanupPending ->
+                                throw BaselineCaptureRejected("保存に失敗しました。残ったデータの削除を次回も再試行します。")
+                        }
+                        currentCoroutineContext().ensureActive()
+                        reviewing.validity.requireCurrent()
+                        prepared = result
+                        review = null
+                        published = true
+                    } finally {
+                        if (!published) owner.close()
+                    }
                 }
             },
             onCancel = ::reset,
-            confirmationLabel = "特徴を取得",
+            confirmationLabel = "確認して端末に保存",
         )
     } else {
         Column(Modifier.fillMaxWidth().background(Color(0xEEF4F0E6)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(when {
                 busy -> "画像を処理しています"
-                prepared != null -> "物体特徴を取得しました（" + prepared!!.appearances.size + "個）"
+                prepared != null -> "画像と物体情報を端末に保存しました（" + prepared!!.appearances.size + "個）"
                 !available -> "平面と追跡が安定するまで待ってください"
                 else -> "机の状態を撮影して解析します"
             })
             if (prepared != null) {
-                Text("保存確定・復元開始はまだ行っていません。")
-                Button(onClick = ::reset) { Text("撮り直す") }
+                Text("実座標の保存・復元開始はまだ行っていません。画面終了時に画像を削除します。")
+                Button(onClick = ::reset) { Text("削除して撮り直す") }
             } else {
                 Text("操作すると撮影画像を解析APIへ送信します。")
                 Button(enabled = available && !busy, onClick = {
