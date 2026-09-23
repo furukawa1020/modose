@@ -8,6 +8,7 @@ import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
 import com.modose.app.ar.anchor.SceneAnchorState
+import com.modose.app.ar.plane.CapturedTableGeometry
 import com.modose.app.ar.coordinates.*
 import com.modose.app.ar.image.*
 import com.modose.app.ar.render.BaselineCameraFrame
@@ -28,6 +29,7 @@ internal class BaselineCaptureRejected(message: String) : RuntimeException(messa
 
 internal data class BaselineImageReview(
     val validity: BaselineCaptureValidity,
+    val tableGeometry: CapturedTableGeometry,
     val image: CpuCameraImage,
     val plan: VlmImageEncodingPlan,
     val reviewing: BaselineFlowState.ReviewingBaseline,
@@ -90,6 +92,11 @@ internal class BaselineCameraRuntime(private val context: Context) {
         val plan = (VlmImageEncodingPlanner.create(image.widthPx, image.heightPx,
             PixelRoi(0, 0, image.widthPx, image.heightPx), rotation) as? VlmImagePlanResult.Planned)?.plan
             ?: fail("解析画像を準備できません。")
+        val tableGeometry = frame.tableGeometry
+            ?: fail("実測した平面境界を取得できません。平面を映して撮り直してください。")
+        if (tableGeometry.copyFor(image.timestampNanos, validity.anchorId) == null) {
+            fail("画像と平面境界の時刻・アンカーが一致しません。")
+        }
         val settings = settings()
         // Validate the actual model before paying for a cloud analysis request.
         extractor().use { checkCurrent() }
@@ -113,7 +120,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
         val result = flow.analyze(capture)
         checkCurrent()
         if (result !is BaselineRunResult.Completed) fail("画像解析に失敗しました。認証・通信・対象物を確認してください。")
-        return BaselineImageReview(validity, image, plan, BaselineFlowState.ReviewingBaseline(capture, result.analysis))
+        return BaselineImageReview(validity, tableGeometry, image, plan, BaselineFlowState.ReviewingBaseline(capture, result.analysis))
     }
 
     fun confirm(review: BaselineImageReview, objects: List<BaselineObject>, checkActive: () -> Unit): MeasuredBaseline {

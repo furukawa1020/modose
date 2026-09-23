@@ -27,6 +27,7 @@ import com.modose.app.ar.image.CpuImageAcquisitionResult
 import com.modose.app.ar.image.CpuImageFailureReason
 import com.modose.app.ar.image.CpuImageRuntimeSkipReason
 import com.modose.app.ar.image.CpuImageSkipReason
+import com.modose.app.ar.plane.CapturedTableGeometry
 import com.modose.app.ar.plane.HorizontalPlaneCandidate
 import com.modose.app.ar.plane.HorizontalPlaneSelectionPolicy
 import com.modose.app.ar.plane.HorizontalPlaneState
@@ -110,6 +111,7 @@ private class AndroidArSessionRuntime(
         }
         val horizontalPlaneState = updateHorizontalPlaneState(frame, widthPx, heightPx)
         val cpuImageResult = acquireCpuImage(frame)
+        val anchorState = updateSceneAnchorState(horizontalPlaneState)
         return ArCameraFrame(
             viewMatrix = if (frame.camera.trackingState == TrackingState.TRACKING) {
                 FloatArray(16).also { frame.camera.getViewMatrix(it, 0) }
@@ -124,7 +126,10 @@ private class AndroidArSessionRuntime(
                 failureReason = frame.camera.trackingFailureReason,
             ),
             horizontalPlaneState = horizontalPlaneState,
-            sceneAnchorState = updateSceneAnchorState(horizontalPlaneState),
+            sceneAnchorState = anchorState,
+            tableGeometry = if (cpuImageResult is CpuImageAcquisitionResult.Acquired &&
+                frame.camera.trackingState == TrackingState.TRACKING
+            ) captureTableGeometry(frame.timestamp, anchorState) else null,
             cpuImageResult = cpuImageResult,
             imageViewTransformResult = buildImageViewTransform(
                 frame = frame,
@@ -133,6 +138,41 @@ private class AndroidArSessionRuntime(
                 viewHeightPx = heightPx,
             ),
         )
+    }
+
+    private fun captureTableGeometry(
+        timestampNanos: Long,
+        anchorState: SceneAnchorState,
+    ): CapturedTableGeometry? {
+        val snapshot = (anchorState as? SceneAnchorState.Tracking)?.anchor ?: return null
+        val plane = selectedPlane ?: return null
+        val anchor = sceneAnchor ?: return null
+        if (!plane.isSelectable() || anchor.trackingState != TrackingState.TRACKING ||
+            System.identityHashCode(anchor).toLong() != snapshot.id) return null
+        return try {
+            val p = snapshot.pose
+            val anchorPose = Pose(
+                floatArrayOf(p.translationX, p.translationY, p.translationZ),
+                floatArrayOf(p.rotationX, p.rotationY, p.rotationZ, p.rotationW))
+            if (!plane.isPoseInPolygon(anchorPose)) return null
+            val polygon = plane.polygon.duplicate().apply { rewind() }
+            if (polygon.remaining() !in 6..128 || polygon.remaining() % 2 != 0) return null
+            val relative = anchorPose.inverse().compose(plane.centerPose)
+            val boundary = DoubleArray(polygon.remaining())
+            for (i in boundary.indices step 2) {
+                val point = relative.transformPoint(floatArrayOf(polygon.get(), 0f, polygon.get()))
+                // Do not flatten a plane displaced from the capture anchor by more than 1 cm.
+                if (point.any { !it.isFinite() } || kotlin.math.abs(point[1]) > 0.01f) return null
+                boundary[i] = point[0].toDouble()
+                boundary[i + 1] = point[2].toDouble()
+            }
+            val origin = anchorPose.translation.map { it.toDouble() }.toDoubleArray()
+            val xAxis = anchorPose.getTransformedAxis(0, 1f).map { it.toDouble() }.toDoubleArray()
+            val zAxis = anchorPose.getTransformedAxis(2, 1f).map { it.toDouble() }.toDoubleArray()
+            CapturedTableGeometry.create(timestampNanos, snapshot.id, origin + xAxis + zAxis + boundary)
+        } catch (_: RuntimeException) {
+            null
+        }
     }
 
     private fun buildImageViewTransform(
