@@ -14,6 +14,8 @@ import com.modose.app.ar.image.*
 import com.modose.app.ar.render.BaselineCameraFrame
 import com.modose.app.ar.render.BaselineCaptureValidity
 import com.modose.app.core.*
+import com.modose.app.flow.compare.*
+import com.modose.app.network.compare.CompareAnalysis
 import com.modose.app.network.*
 import com.modose.app.network.baseline.BaselineObject
 import com.modose.app.vision.quality.*
@@ -40,11 +42,22 @@ internal data class BaselineImageReview(
 internal data class PreparedBaseline(
     val measured: MeasuredBaseline,
     val targets: NativeBaselineTargets,
+    val comparison: SavedSceneComparison,
+)
+
+private data class BaselineCaptureInput(
+    val validity: BaselineCaptureValidity,
+    val tableGeometry: CapturedTableGeometry,
+    val imageCapture: NativeImageCapture,
+    val image: CpuCameraImage,
+    val plan: VlmImageEncodingPlan,
 )
 
 /** Blocking boundary: every method runs on the dedicated capture worker. */
 internal class BaselineCameraRuntime(private val context: Context) {
-    fun analyze(packet: BaselineCameraFrame, checkActive: () -> Unit): BaselineImageReview {
+    private fun prepare(
+        packet: BaselineCameraFrame, sceneId: String, checkActive: () -> Unit,
+    ): BaselineCaptureInput {
         val validity = packet.validity ?: fail("撮影時のアンカーを確認できません。撮り直してください。")
         fun checkCurrent() {
             checkActive()
@@ -104,10 +117,20 @@ internal class BaselineCameraRuntime(private val context: Context) {
         if (tableGeometry.copyFor(image.timestampNanos, validity.anchorId) == null) {
             fail("画像と平面境界の時刻・アンカーが一致しません。")
         }
-        val sceneId = UUID.randomUUID().toString()
         val imageCapture = NativeImageCaptureFactory.capture(
             frame, NativeGuidanceEpoch(sceneId), frame.timestampNanos / 1_000_000,
         ) ?: fail("撮影時のカメラ座標を取得できません。撮り直してください。")
+        return BaselineCaptureInput(validity, tableGeometry, imageCapture, image, plan)
+    }
+
+    fun analyze(packet: BaselineCameraFrame, checkActive: () -> Unit): BaselineImageReview {
+        val (validity, tableGeometry, imageCapture, image, plan) =
+            prepare(packet, UUID.randomUUID().toString(), checkActive)
+        val sceneId = imageCapture.epoch.sceneId
+        fun checkCurrent() {
+            checkActive()
+            if (!validity.isCurrent) fail("撮影時のアンカーが失効しました。撮り直してください。")
+        }
         val settings = settings()
         // Validate the actual model before paying for a cloud analysis request.
         extractor().use { checkCurrent() }
@@ -168,7 +191,48 @@ internal class BaselineCameraRuntime(private val context: Context) {
             fail("全物体を平面上へ投影できません。平面全体を映して撮り直してください。")
         }
         checkCurrent()
-        return PreparedBaseline(measured, targets)
+        return PreparedBaseline(measured, targets, SavedSceneComparison(
+            measured.sceneId, measured.imageTimestampNanos, review.validity,
+            review.reviewing.capture.image, objects,
+        ))
+    }
+
+    fun compare(saved: PreparedBaseline, packet: BaselineCameraFrame, checkActive: () -> Unit): CompareAnalysis {
+        fun checkCurrent() {
+            checkActive()
+            if (!saved.comparison.validity.isCurrent || packet.validity !== saved.comparison.validity) {
+                fail("保存時の追跡が失効しました。削除して撮り直してください。")
+            }
+        }
+        checkCurrent()
+        if (saved.comparison.hasAttempted) fail("この保存状態では比較済みです。削除して撮り直してください。")
+        val input = prepare(packet, saved.measured.sceneId, ::checkCurrent)
+        val encoded = (VlmJpegEncoder().encode(input.image, input.plan) as? VlmJpegEncodingResult.Encoded)?.image
+            ?: fail("比較画像を生成できません。")
+        checkCurrent()
+        val settings = settings()
+        val app = firebase(settings)
+        val client = AuthenticatedVisionApiClient(
+            settings.getProperty("apiBaseUrl"), "0.1.0",
+            FirebaseIdTokenProvider(FirebaseAuth.getInstance(app)),
+            FirebaseAppCheckTokenProvider(FirebaseAppCheck.getInstance(app)),
+            transport = UrlConnectionVisionHttpTransport(),
+            maximumResponseBytes = 64_000,
+        )
+        val result = saved.comparison.execute(input.validity, input.image.timestampNanos,
+            encoded, ::checkCurrent) { request ->
+            checkCurrent()
+            client.execute(request)
+        }
+        checkCurrent()
+        return when (result) {
+            is SavedCompareResult.Compared -> result.analysis
+            is SavedCompareResult.TransportFailure ->
+                fail("比較APIの認証・通信に失敗しました。自動再送はしません。削除して撮り直してください。")
+            SavedCompareResult.InvalidCapture -> fail("比較画像と保存状態が一致しません。撮り直してください。")
+            SavedCompareResult.InvalidResponse -> fail("比較結果が契約に適合しません。削除して撮り直してください。")
+            SavedCompareResult.AlreadyAttempted -> fail("この保存状態では比較済みです。削除して撮り直してください。")
+        }
     }
 
     private fun extractor(): AppearanceExtractor = when (val opened = MediaPipeAppearanceExtractor.open(
