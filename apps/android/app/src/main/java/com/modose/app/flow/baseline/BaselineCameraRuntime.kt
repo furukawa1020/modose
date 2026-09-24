@@ -45,6 +45,11 @@ internal data class PreparedBaseline(
     val comparison: SavedSceneComparison,
 )
 
+internal data class PreparedComparison(
+    val analysis: CompareAnalysis,
+    val measurements: MeasuredComparison,
+)
+
 private data class BaselineCaptureInput(
     val validity: BaselineCaptureValidity,
     val tableGeometry: CapturedTableGeometry,
@@ -197,7 +202,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
         ))
     }
 
-    fun compare(saved: PreparedBaseline, packet: BaselineCameraFrame, checkActive: () -> Unit): CompareAnalysis {
+    fun compare(saved: PreparedBaseline, packet: BaselineCameraFrame, checkActive: () -> Unit): PreparedComparison {
         fun checkCurrent() {
             checkActive()
             if (!saved.comparison.validity.isCurrent || packet.validity !== saved.comparison.validity) {
@@ -225,7 +230,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
             client.execute(request)
         }
         checkCurrent()
-        return when (result) {
+        val analysis = when (result) {
             is SavedCompareResult.Compared -> result.analysis
             is SavedCompareResult.TransportFailure ->
                 fail("比較APIの認証・通信に失敗しました。自動再送はしません。削除して撮り直してください。")
@@ -233,6 +238,14 @@ internal class BaselineCameraRuntime(private val context: Context) {
             SavedCompareResult.InvalidResponse -> fail("比較結果が契約に適合しません。削除して撮り直してください。")
             SavedCompareResult.AlreadyAttempted -> fail("この保存状態では比較済みです。削除して撮り直してください。")
         }
+        checkCurrent()
+        val measured = extractor().use { engine ->
+            CompareAppearanceBuilder.build(saved.measured, analysis, input.image, input.plan, engine, ::checkCurrent)
+        }
+        checkCurrent()
+        val measurements = (measured as? CompareAppearanceResult.Built)?.measurements
+            ?: fail("比較画像の物体特徴を確定できません。対応を保留し、削除して撮り直してください。")
+        return PreparedComparison(analysis, measurements)
     }
 
     private fun extractor(): AppearanceExtractor = when (val opened = MediaPipeAppearanceExtractor.open(

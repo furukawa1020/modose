@@ -12,7 +12,6 @@ import androidx.compose.ui.unit.dp
 import com.modose.app.ar.render.BaselineCameraFrame
 import com.modose.app.ar.render.CameraBackgroundSurfaceView
 import com.modose.app.flow.baseline.*
-import com.modose.app.network.compare.CompareAnalysis
 import com.modose.app.flow.compare.CurrentObjectState
 import com.modose.app.ui.review.BaselineObjectReviewScreen
 import java.util.concurrent.Executors
@@ -35,7 +34,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     var message by remember { mutableStateOf<String?>(null) }
     var review by remember { mutableStateOf<BaselineImageReview?>(null) }
     var prepared by remember { mutableStateOf<PreparedBaseline?>(null) }
-    var comparison by remember { mutableStateOf<CompareAnalysis?>(null) }
+    var comparison by remember { mutableStateOf<PreparedComparison?>(null) }
 
     fun reset() {
         savedSession?.close()
@@ -158,8 +157,11 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                         comparison = result
                     }
                 }) { Text("現在の状態と比較") }
-                comparison?.let { result ->
-                    Text("比較結果（画像解析のみ）")
+                comparison?.let { measured ->
+                    val result = measured.analysis
+                    Text("比較結果（比較撮影時点）")
+                    Text("端末内外観照合：" + measured.measurements.objects.size + "候補・" +
+                        measured.measurements.pairs.size + "組合せ")
                     result.matches.forEach { match ->
                         val label = saved.comparison.labels.getValue(match.baselineObjectId)
                         val state = when (match.state) {
@@ -172,9 +174,21 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                             CurrentObjectState.Ambiguous -> "対応が曖昧です"
                         }
                         Text(label + "：" + state)
+                        val savedId = saved.measured.objectIds.getValue(match.baselineObjectId)
+                        val candidate = measured.measurements.objects.singleOrNull { it.claimedSavedId == savedId }
+                        val scores = candidate?.let { current ->
+                            measured.measurements.pairs.singleOrNull {
+                                it.savedId == savedId && it.currentId == current.currentId
+                            }
+                        }
+                        scores?.let {
+                            Text(String.format(java.util.Locale.ROOT,
+                                "埋め込み類似度 %.2f / 色特徴類似度 %.2f",
+                                it.embeddingSimilarity, it.signatureSimilarity))
+                        }
                     }
                     if (result.addedObjects.isNotEmpty()) Text("追加物体：" + result.addedObjects.size + "個")
-                    Text("追跡ガイド・最終確認はまだ開始していません。")
+                    Text("類似度だけでは同一物体を確定しません。追跡ガイド・最終確認は未開始です。")
                 }
                 if (saved.comparison.hasAttempted && comparison == null && !busy) {
                     Text("比較要求は送信済みです。再実行には削除して撮り直してください。")
