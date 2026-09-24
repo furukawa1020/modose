@@ -2,6 +2,7 @@ package com.modose.app.ar.render
 
 import android.content.Context
 import android.os.Looper
+import com.modose.app.ar.coordinates.NativeAnchorRebaseFactory
 import com.modose.app.ar.coordinates.NativeImageCaptureFactory
 import com.modose.app.ar.image.CpuCameraImage
 import com.modose.app.ar.image.CpuImageAcquisitionResult
@@ -364,13 +365,14 @@ private class CameraSurfaceRenderer(
         val binding = recognitionBinding ?: return
         val anchor = (frame.sceneAnchorState as? SceneAnchorState.Tracking)?.anchor
         if (binding.source !== source || anchor == null ||
-            anchor.id != binding.anchor.id || anchor.pose != binding.anchor.pose
+            anchor.id != binding.anchor.id
         ) return
+        val rebase = NativeAnchorRebaseFactory.create(binding.anchor, anchor) ?: return
         val image = (frame.cpuImageResult as? CpuImageAcquisitionResult.Acquired)?.image ?: return
         if (image.timestampNanos <= binding.lastImageTimestamp) return
         try {
             val capture = NativeImageCaptureFactory.capture(
-                frame, binding.pipeline.epoch, binding.monotonicMillis(),
+                frame, binding.pipeline.epoch, binding.monotonicMillis(), rebase,
             ) ?: return
             binding.lastImageTimestamp = image.timestampNanos
             binding.submit(capture, image)
@@ -388,12 +390,20 @@ private class CameraSurfaceRenderer(
         val anchor = (frame.sceneAnchorState as? SceneAnchorState.Tracking)?.anchor
         if (frame.trackingDiagnostics.phase != ArTrackingPhase.Tracking ||
             binding.source !== source || anchor == null ||
-            anchor.id != binding.anchor.id || anchor.pose != binding.anchor.pose
+            anchor.id != binding.anchor.id
         ) {
             guideBinding = null
             return true
         }
-        val view = frame.viewMatrix ?: return true
+        val rebase = NativeAnchorRebaseFactory.create(binding.anchor, anchor) ?: run {
+            guideBinding = null
+            return true
+        }
+        val cameraView = frame.viewMatrix ?: return true
+        val view = NativeAnchorRebaseFactory.viewMatrix(rebase, cameraView) ?: run {
+            guideBinding = null
+            return true
+        }
         val projection = frame.projectionMatrix ?: return true
         val success = try {
             val presentation = binding.snapshot.presentationAt(binding.monotonicMillis())
