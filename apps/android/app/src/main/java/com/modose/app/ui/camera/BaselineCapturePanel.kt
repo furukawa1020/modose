@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.dp
 import com.modose.app.ar.render.BaselineCameraFrame
 import com.modose.app.ar.render.CameraBackgroundSurfaceView
 import com.modose.app.flow.baseline.*
+import com.modose.app.network.compare.CompareAnalysis
+import com.modose.app.flow.compare.CurrentObjectState
 import com.modose.app.ui.review.BaselineObjectReviewScreen
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
@@ -33,6 +35,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     var message by remember { mutableStateOf<String?>(null) }
     var review by remember { mutableStateOf<BaselineImageReview?>(null) }
     var prepared by remember { mutableStateOf<PreparedBaseline?>(null) }
+    var comparison by remember { mutableStateOf<CompareAnalysis?>(null) }
 
     fun reset() {
         savedSession?.close()
@@ -41,6 +44,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
         view.cancelBaselineCapture()
         review = null
         prepared = null
+        comparison = null
         message = null
     }
     DisposableEffect(view, dispatcher) {
@@ -77,6 +81,19 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                 busy = false
             }
         }
+    }
+
+    suspend fun captureFrame(): BaselineCameraFrame = suspendCancellableCoroutine<BaselineCameraFrame> { continuation ->
+        continuation.invokeOnCancellation { view.cancelBaselineCapture() }
+        val accepted = view.requestBaselineFrame { frame ->
+            if (continuation.isActive) {
+                if (frame == null) continuation.resumeWithException(
+                    BaselineCaptureRejected("撮影が中断されました。"))
+                else continuation.resume(frame)
+            }
+        }
+        if (!accepted && continuation.isActive) continuation.resumeWithException(
+            BaselineCaptureRejected("カメラは使用できません。"))
     }
 
     val reviewing = review
@@ -125,24 +142,50 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                 else -> "机の状態を撮影して解析します"
             })
             if (prepared != null) {
-                Text("全物体の目標座標をこのARセッション内に準備しました。復元操作はまだ開始していません。画面終了時に画像と目標を破棄します。")
+                val saved = prepared!!
+                Text("目標座標を準備しました。比較結果だけでは復元完了になりません。")
+                Text("比較すると保存画像と現在画像を解析APIへ送信します。")
+                Button(enabled = available && !busy && !saved.comparison.hasAttempted, onClick = {
+                    runOperation {
+                        comparison = null
+                        val packet = captureFrame()
+                        val result = withContext(dispatcher) {
+                            val operation = currentCoroutineContext()
+                            runtime.compare(saved, packet) { operation.ensureActive() }
+                        }
+                        currentCoroutineContext().ensureActive()
+                        saved.comparison.validity.requireCurrent()
+                        comparison = result
+                    }
+                }) { Text("現在の状態と比較") }
+                comparison?.let { result ->
+                    Text("比較結果（画像解析のみ）")
+                    result.matches.forEach { match ->
+                        val label = saved.comparison.labels.getValue(match.baselineObjectId)
+                        val state = when (match.state) {
+                            CurrentObjectState.Aligned -> "見た目は一致"
+                            CurrentObjectState.Moved -> "移動あり"
+                            CurrentObjectState.Rotated -> "回転あり"
+                            CurrentObjectState.MovedRotated -> "移動・回転あり"
+                            CurrentObjectState.Missing -> "見つかりません"
+                            CurrentObjectState.Occluded -> "隠れています"
+                            CurrentObjectState.Ambiguous -> "対応が曖昧です"
+                        }
+                        Text(label + "：" + state)
+                    }
+                    if (result.addedObjects.isNotEmpty()) Text("追加物体：" + result.addedObjects.size + "個")
+                    Text("追跡ガイド・最終確認はまだ開始していません。")
+                }
+                if (saved.comparison.hasAttempted && comparison == null && !busy) {
+                    Text("比較要求は送信済みです。再実行には削除して撮り直してください。")
+                }
+                Text("画面終了時に画像と目標を破棄します。")
                 Button(onClick = ::reset) { Text("削除して撮り直す") }
             } else {
                 Text("操作すると撮影画像を解析APIへ送信します。")
                 Button(enabled = available && !busy, onClick = {
                     runOperation {
-                        val packet = suspendCancellableCoroutine<BaselineCameraFrame> { continuation ->
-                            continuation.invokeOnCancellation { view.cancelBaselineCapture() }
-                            val accepted = view.requestBaselineFrame { frame ->
-                                if (continuation.isActive) {
-                                    if (frame == null) continuation.resumeWithException(
-                                        BaselineCaptureRejected("撮影が中断されました。"))
-                                    else continuation.resume(frame)
-                                }
-                            }
-                            if (!accepted && continuation.isActive) continuation.resumeWithException(
-                                BaselineCaptureRejected("カメラは使用できません。"))
-                        }
+                        val packet = captureFrame()
                         val result = withContext(dispatcher) {
                             val operation = currentCoroutineContext()
                             runtime.analyze(packet) { operation.ensureActive() }
