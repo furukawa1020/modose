@@ -13,6 +13,7 @@ import com.modose.app.ar.coordinates.*
 import com.modose.app.ar.image.*
 import com.modose.app.ar.render.BaselineCameraFrame
 import com.modose.app.ar.render.BaselineCaptureValidity
+import com.modose.app.core.*
 import com.modose.app.network.*
 import com.modose.app.network.baseline.BaselineObject
 import com.modose.app.vision.quality.*
@@ -30,9 +31,15 @@ internal class BaselineCaptureRejected(message: String) : RuntimeException(messa
 internal data class BaselineImageReview(
     val validity: BaselineCaptureValidity,
     val tableGeometry: CapturedTableGeometry,
+    val imageCapture: NativeImageCapture,
     val image: CpuCameraImage,
     val plan: VlmImageEncodingPlan,
     val reviewing: BaselineFlowState.ReviewingBaseline,
+)
+
+internal data class PreparedBaseline(
+    val measured: MeasuredBaseline,
+    val targets: NativeBaselineTargets,
 )
 
 /** Blocking boundary: every method runs on the dedicated capture worker. */
@@ -97,6 +104,10 @@ internal class BaselineCameraRuntime(private val context: Context) {
         if (tableGeometry.copyFor(image.timestampNanos, validity.anchorId) == null) {
             fail("画像と平面境界の時刻・アンカーが一致しません。")
         }
+        val sceneId = UUID.randomUUID().toString()
+        val imageCapture = NativeImageCaptureFactory.capture(
+            frame, NativeGuidanceEpoch(sceneId), frame.timestampNanos / 1_000_000,
+        ) ?: fail("撮影時のカメラ座標を取得できません。撮り直してください。")
         val settings = settings()
         // Validate the actual model before paying for a cloud analysis request.
         extractor().use { checkCurrent() }
@@ -111,7 +122,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
         checkCurrent()
         val client = AuthenticatedVisionApiClient(settings.getProperty("apiBaseUrl"), "0.1.0",
             FirebaseIdTokenProvider(auth), FirebaseAppCheckTokenProvider(FirebaseAppCheck.getInstance(firebase)))
-        val capture = BaselineCapture(UUID.randomUUID().toString(), Instant.now(),
+        val capture = BaselineCapture(sceneId, Instant.now(),
             UUID.randomUUID().toString(), encoded)
         val flow = BaselineAnalysisUseCase(executeRequest = { request ->
             checkCurrent()
@@ -120,10 +131,10 @@ internal class BaselineCameraRuntime(private val context: Context) {
         val result = flow.analyze(capture)
         checkCurrent()
         if (result !is BaselineRunResult.Completed) fail("画像解析に失敗しました。認証・通信・対象物を確認してください。")
-        return BaselineImageReview(validity, tableGeometry, image, plan, BaselineFlowState.ReviewingBaseline(capture, result.analysis))
+        return BaselineImageReview(validity, tableGeometry, imageCapture, image, plan, BaselineFlowState.ReviewingBaseline(capture, result.analysis))
     }
 
-    fun confirm(review: BaselineImageReview, objects: List<BaselineObject>, checkActive: () -> Unit): MeasuredBaseline {
+    fun confirm(review: BaselineImageReview, objects: List<BaselineObject>, checkActive: () -> Unit): PreparedBaseline {
         fun checkCurrent() {
             checkActive()
             if (!review.validity.isCurrent) fail("撮影時のアンカーが失効しました。撮り直してください。")
@@ -133,8 +144,31 @@ internal class BaselineCameraRuntime(private val context: Context) {
             BaselineAppearanceBuilder.build(review.reviewing.capture.sceneId, review.image, review.plan, objects, engine)
         }
         checkCurrent()
-        return (result as? BaselineAppearanceResult.Built)?.baseline
+        val measured = (result as? BaselineAppearanceResult.Built)?.baseline
             ?: fail("物体の特徴を取得できません。保存せず撮り直してください。")
+        val geometry = review.tableGeometry.copyFor(review.image.timestampNanos, review.validity.anchorId)
+            ?: fail("画像と平面境界が一致しません。保存せず撮り直してください。")
+        val boxes = objects.map { item ->
+            val id = measured.objectIds[item.id]
+                ?: fail("物体IDが一致しません。保存せず撮り直してください。")
+            val box = BaselineCpuBoxMapper.map(review.image, review.plan, item.boundingBox)
+                ?: fail("物体の画像座標が不正です。保存せず撮り直してください。")
+            NativeImageBox(id, box.left.toDouble(), box.top.toDouble(),
+                box.right.toDouble(), box.bottom.toDouble(), false)
+        }
+        val rays = review.imageCapture.project(NativeImageRecognition(
+            review.imageCapture.epoch, review.image.timestampNanos, boxes, emptyList(),
+        )) as? NativeImageProjection.Projected
+            ?: fail("撮影画像から物体のレイを生成できません。保存せず撮り直してください。")
+        val targets = try {
+            NativeBaselineTargets.project(geometry, rays.detections)
+        } catch (_: IllegalArgumentException) {
+            fail("物体の投影情報が不正です。保存せず撮り直してください。")
+        } catch (_: IllegalStateException) {
+            fail("全物体を平面上へ投影できません。平面全体を映して撮り直してください。")
+        }
+        checkCurrent()
+        return PreparedBaseline(measured, targets)
     }
 
     private fun extractor(): AppearanceExtractor = when (val opened = MediaPipeAppearanceExtractor.open(
