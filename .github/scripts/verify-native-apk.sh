@@ -16,7 +16,7 @@ trap 'rm -f "$temp/library.so"; rmdir "$temp"' EXIT
 
 abis=(arm64-v8a armeabi-v7a x86_64 x86)
 expected="$(printf 'lib/%s/libscene_core_jni.so\n' "${abis[@]}" | LC_ALL=C sort)"
-methods=(nativeCreate nativeApply nativeClose nativeBeginVerification nativeCompleteVerification nativeGuidance)
+methods=(nativeProjectTargets nativeCreate nativeApply nativeClose nativeBeginVerification nativeCompleteVerification nativeGuidance)
 
 for apk in "$@"; do
   [[ -f "$apk" ]] || { echo "APK missing: $apk" >&2; exit 1; }
@@ -46,6 +46,6 @@ for apk in "$@"; do
     while IFS= read -r alignment; do
       (( alignment >= 16384 )) || { echo "ELF LOAD alignment too small: $abi" >&2; exit 1; }
     done <<< "$alignments"
-    printf 'verified %s %s: ELF ABI, six JNI exports, 16KB LOAD alignment\n' "$apk" "$abi"
+    printf 'verified %s %s: ELF ABI, seven JNI exports, 16KB LOAD alignment\n' "$apk" "$abi"
   done
 done

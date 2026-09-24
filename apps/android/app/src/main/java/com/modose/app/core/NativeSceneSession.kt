@@ -6,6 +6,7 @@ internal object NativeSceneBindings {
         System.loadLibrary("scene_core_jni")
     }
 
+    external fun nativeProjectTargets(geometry: DoubleArray, rays: DoubleArray): DoubleArray
     external fun nativeCreate(geometry: DoubleArray, targetIds: IntArray, targets: DoubleArray): Long
     external fun nativeApply(handle: Long, observedAtMs: Long, packet: ByteArray): Int
     external fun nativeBeginVerification(handle: Long, observedAtMs: Long): Long
