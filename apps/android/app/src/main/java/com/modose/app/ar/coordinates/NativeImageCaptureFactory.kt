@@ -4,12 +4,16 @@ import android.opengl.Matrix
 import com.modose.app.ar.image.CpuImageAcquisitionResult
 import com.modose.app.ar.session.ArCameraFrame
 import com.modose.app.ar.session.ArTrackingPhase
+import com.modose.app.core.NativeAnchorRebase
 import com.modose.app.core.NativeGuidanceEpoch
 import com.modose.app.core.NativeImageCapture
 
 internal object NativeImageCaptureFactory {
     /** Invoke on the capture thread before starting asynchronous recognition. */
-    fun capture(frame: ArCameraFrame, epoch: NativeGuidanceEpoch, observedAtMs: Long): NativeImageCapture? {
+    fun capture(
+        frame: ArCameraFrame, epoch: NativeGuidanceEpoch, observedAtMs: Long,
+        worldRebase: NativeAnchorRebase? = null,
+    ): NativeImageCapture? {
         if (frame.trackingDiagnostics.phase != ArTrackingPhase.Tracking || frame.timestampNanos <= 0) return null
         val image = (frame.cpuImageResult as? CpuImageAcquisitionResult.Acquired)?.image ?: return null
         val mapping = (frame.imageViewTransformResult as? ImageViewTransformFrameResult.Available)
@@ -42,8 +46,11 @@ internal object NativeImageCaptureFactory {
             (yEnd.y.toDouble() - origin.y) / image.heightPx,
             origin.x.toDouble(), origin.y.toDouble(),
         )
+        val currentInverse = DoubleArray(16) { inverse[it].toDouble() }
+        val capturedInverse = if (worldRebase == null) currentInverse else
+            worldRebase.rebaseInverseViewProjection(currentInverse) ?: return null
         return NativeImageCapture.create(epoch, observedAtMs, image.timestampNanos,
             image.widthPx, image.heightPx, mapping.viewWidthPx, mapping.viewHeightPx,
-            affine, DoubleArray(16) { inverse[it].toDouble() })
+            affine, capturedInverse)
     }
 }
