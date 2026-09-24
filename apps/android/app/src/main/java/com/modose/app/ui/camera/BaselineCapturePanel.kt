@@ -186,6 +186,19 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                                 "埋め込み類似度 %.2f / 色特徴類似度 %.2f",
                                 it.embeddingSimilarity, it.signatureSimilarity))
                         }
+                        candidate?.let { current ->
+                            measured.distances.singleOrNull {
+                                it.currentId == current.currentId && it.savedId == savedId
+                            }?.let { projection ->
+                                val meters = projection.distanceMeters
+                                if (meters != null) {
+                                    Text(String.format(java.util.Locale.ROOT,
+                                        "比較撮影時の候補距離：%.1f cm", meters * 100.0))
+                                } else {
+                                    Text("比較撮影時の候補位置：平面へ投影できません")
+                                }
+                            }
+                        }
                     }
                     if (result.addedObjects.isNotEmpty()) Text("追加物体：" + result.addedObjects.size + "個")
                     Text("類似度だけでは同一物体を確定しません。追跡ガイド・最終確認は未開始です。")
