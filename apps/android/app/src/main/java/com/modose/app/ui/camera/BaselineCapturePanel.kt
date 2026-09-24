@@ -37,6 +37,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     var comparison by remember { mutableStateOf<PreparedComparison?>(null) }
 
     fun reset() {
+        view.stopGuidance()
         savedSession?.close()
         savedSession = null
         job?.cancel()
@@ -48,6 +49,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     }
     DisposableEffect(view, dispatcher) {
         onDispose {
+            view.stopGuidance()
             savedSession?.close()
             job?.cancel()
             view.cancelBaselineCapture()
@@ -201,7 +203,35 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                         }
                     }
                     if (result.addedObjects.isNotEmpty()) Text("追加物体：" + result.addedObjects.size + "個")
-                    Text("類似度だけでは同一物体を確定しません。追跡ガイド・最終確認は未開始です。")
+                    Text("移動ガイドは現在画像ごとに再照合します。向きの確認・最終確認は未接続のため、復元完了にはなりません。")
+                    Button(enabled = available && !busy, onClick = {
+                        view.stopGuidance()
+                        try {
+                            saved.comparison.validity.requireCurrent()
+                            val source = view.frameSource
+                                ?: throw BaselineCaptureRejected("カメラを再開してください。")
+                            val evidence = runtime.movementEvidence(saved, measured)
+                            try {
+                                view.startGuidance(saved.measured.sceneId, source, saved.anchor,
+                                    saved.targets.copyGeometry(), saved.targets.copyIds(),
+                                    saved.targets.copyPositions(),
+                                    android.os.SystemClock::elapsedRealtime, evidence)
+                            } catch (failure: RuntimeException) {
+                                // No frame can use the lazy source when construction failed.
+                                evidence.close()
+                                throw failure
+                            }
+                            message = "移動ガイドを要求しました。確信不足・重なり・追跡停止時は矢印を保留します。"
+                        } catch (failure: BaselineCaptureRejected) {
+                            message = failure.message
+                        } catch (_: RuntimeException) {
+                            message = "ガイドを開始できません。カメラ・保存状態を確認してください。"
+                        }
+                    }) { Text("移動ガイドを開始・再開") }
+                    Button(onClick = {
+                        view.stopGuidance()
+                        message = "移動ガイドを停止しました。"
+                    }) { Text("移動ガイドを停止") }
                 }
                 if (saved.comparison.hasAttempted && comparison == null && !busy) {
                     Text("比較要求は送信済みです。再実行には削除して撮り直してください。")
