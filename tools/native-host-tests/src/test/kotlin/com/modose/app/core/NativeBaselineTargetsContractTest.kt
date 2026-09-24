@@ -25,7 +25,9 @@ class NativeBaselineTargetsContractTest {
         assertArrayEquals(intArrayOf(7, 2), result.copyIds())
         assertArrayEquals(doubleArrayOf(0.2, -0.3, -0.4, 0.5), result.copyPositions(), 1e-9)
         NativeSceneSession.create(result.copyGeometry(), result.copyIds(), result.copyPositions()).use {
-            assertNull(it.guidance(0))
+            val guidance = it.guidance(0) as NativeGuidance.Recover
+            assertEquals(NativeRecoveryReason.UNOBSERVED, guidance.reason)
+            assertTrue(guidance.objectId in result.copyIds())
         }
     }
 
