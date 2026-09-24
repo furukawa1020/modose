@@ -7,6 +7,7 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
+import com.modose.app.ar.anchor.SceneAnchorSnapshot
 import com.modose.app.ar.anchor.SceneAnchorState
 import com.modose.app.ar.plane.CapturedTableGeometry
 import com.modose.app.ar.coordinates.*
@@ -37,17 +38,20 @@ internal data class BaselineImageReview(
     val image: CpuCameraImage,
     val plan: VlmImageEncodingPlan,
     val reviewing: BaselineFlowState.ReviewingBaseline,
+    val anchor: SceneAnchorSnapshot,
 )
 
 internal data class PreparedBaseline(
     val measured: MeasuredBaseline,
     val targets: NativeBaselineTargets,
     val comparison: SavedSceneComparison,
+    val anchor: SceneAnchorSnapshot,
 )
 
 internal data class PreparedComparison(
     val analysis: CompareAnalysis,
     val measurements: MeasuredComparison,
+    val distances: List<NativeCandidateDistance>,
 )
 
 private data class BaselineCaptureInput(
@@ -56,6 +60,7 @@ private data class BaselineCaptureInput(
     val imageCapture: NativeImageCapture,
     val image: CpuCameraImage,
     val plan: VlmImageEncodingPlan,
+    val anchor: SceneAnchorSnapshot,
 )
 
 /** Blocking boundary: every method runs on the dedicated capture worker. */
@@ -125,12 +130,13 @@ internal class BaselineCameraRuntime(private val context: Context) {
         val imageCapture = NativeImageCaptureFactory.capture(
             frame, NativeGuidanceEpoch(sceneId), frame.timestampNanos / 1_000_000,
         ) ?: fail("撮影時のカメラ座標を取得できません。撮り直してください。")
-        return BaselineCaptureInput(validity, tableGeometry, imageCapture, image, plan)
+        val anchor = (frame.sceneAnchorState as SceneAnchorState.Tracking).anchor
+        return BaselineCaptureInput(validity, tableGeometry, imageCapture, image, plan, anchor)
     }
 
     fun analyze(packet: BaselineCameraFrame, checkActive: () -> Unit): BaselineImageReview {
-        val (validity, tableGeometry, imageCapture, image, plan) =
-            prepare(packet, UUID.randomUUID().toString(), checkActive)
+        val input = prepare(packet, UUID.randomUUID().toString(), checkActive)
+        val (validity, tableGeometry, imageCapture, image, plan) = input
         val sceneId = imageCapture.epoch.sceneId
         fun checkCurrent() {
             checkActive()
@@ -159,7 +165,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
         val result = flow.analyze(capture)
         checkCurrent()
         if (result !is BaselineRunResult.Completed) fail("画像解析に失敗しました。認証・通信・対象物を確認してください。")
-        return BaselineImageReview(validity, tableGeometry, imageCapture, image, plan, BaselineFlowState.ReviewingBaseline(capture, result.analysis))
+        return BaselineImageReview(validity, tableGeometry, imageCapture, image, plan, BaselineFlowState.ReviewingBaseline(capture, result.analysis), input.anchor)
     }
 
     fun confirm(review: BaselineImageReview, objects: List<BaselineObject>, checkActive: () -> Unit): PreparedBaseline {
@@ -199,7 +205,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
         return PreparedBaseline(measured, targets, SavedSceneComparison(
             measured.sceneId, measured.imageTimestampNanos, review.validity,
             review.reviewing.capture.image, objects,
-        ))
+        ), review.anchor)
     }
 
     fun compare(saved: PreparedBaseline, packet: BaselineCameraFrame, checkActive: () -> Unit): PreparedComparison {
@@ -212,6 +218,12 @@ internal class BaselineCameraRuntime(private val context: Context) {
         checkCurrent()
         if (saved.comparison.hasAttempted) fail("この保存状態では比較済みです。削除して撮り直してください。")
         val input = prepare(packet, saved.measured.sceneId, ::checkCurrent)
+        val rebase = NativeAnchorRebaseFactory.create(saved.anchor, input.anchor)
+            ?: fail("保存時と比較時のアンカーを対応付けできません。撮り直してください。")
+        // Freeze this frame's camera-to-saved-world mapping BEFORE asynchronous cloud work.
+        val comparisonCapture = NativeImageCaptureFactory.capture(packet.frame,
+            input.imageCapture.epoch, input.imageCapture.observedAtMs, rebase)
+            ?: fail("比較画像の投影情報を取得できません。撮り直してください。")
         val encoded = (VlmJpegEncoder().encode(input.image, input.plan) as? VlmJpegEncodingResult.Encoded)?.image
             ?: fail("比較画像を生成できません。")
         checkCurrent()
@@ -245,7 +257,17 @@ internal class BaselineCameraRuntime(private val context: Context) {
         checkCurrent()
         val measurements = (measured as? CompareAppearanceResult.Built)?.measurements
             ?: fail("比較画像の物体特徴を確定できません。対応を保留し、削除して撮り直してください。")
-        return PreparedComparison(analysis, measurements)
+        val candidates = measurements.objects.map { item ->
+            val box = item.box
+            NativeComparedBox(item.claimedSavedId, NativeImageBox(item.currentId,
+                box.left.toDouble(), box.top.toDouble(), box.right.toDouble(), box.bottom.toDouble(), false))
+        }
+        val projected = NativeComparisonProjector.project(measurements.sceneId,
+            measurements.imageTimestampNanos, comparisonCapture, saved.targets, candidates)
+            as? NativeComparisonProjection.Projected
+            ?: fail("比較画像と候補の座標情報が一致しません。撮り直してください。")
+        checkCurrent()
+        return PreparedComparison(analysis, measurements, projected.distances)
     }
 
     private fun extractor(): AppearanceExtractor = when (val opened = MediaPipeAppearanceExtractor.open(
