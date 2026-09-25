@@ -270,6 +270,23 @@ internal class BaselineCameraRuntime(private val context: Context) {
         return PreparedComparison(analysis, measurements, projected.distances)
     }
 
+    /** Creates a lazy source; model creation/inference/close stay on the detector worker. */
+    fun movementEvidence(saved: PreparedBaseline, compared: PreparedComparison): CpuImageEvidenceSource {
+        if (!saved.comparison.validity.isCurrent ||
+            saved.measured.sceneId != compared.measurements.sceneId ||
+            compared.measurements.imageTimestampNanos <= saved.measured.imageTimestampNanos ||
+            compared.measurements.objects.any { it.claimedSavedId !in saved.measured.objectIds.values }
+        ) fail("比較と保存状態が一致しません。撮り直してください。")
+        val semantics = try {
+            CompareFrameSemantics(compared.measurements)
+        } catch (_: IllegalArgumentException) {
+            fail("比較候補がない、または重なっています。ガイドを開始できません。")
+        }
+        return saved.measured.createEvidenceSource(semantics) {
+            MediaPipeAppearanceExtractor.open(context, MODEL_ASSET, MODEL_SHA256)
+        }
+    }
+
     private fun extractor(): AppearanceExtractor = when (val opened = MediaPipeAppearanceExtractor.open(
         context, MODEL_ASSET, MODEL_SHA256,
     )) {
