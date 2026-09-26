@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.modose.app.ar.render.BaselineCameraFrame
 import com.modose.app.ar.render.CameraBackgroundSurfaceView
+import com.modose.app.core.NativeGuidancePipeline
 import com.modose.app.core.NativeGuidanceReadout
 import com.modose.app.core.NativeFrameHiddenReason
 import com.modose.app.core.NativeRecoveryReason
@@ -38,6 +39,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     var review by remember { mutableStateOf<BaselineImageReview?>(null) }
     var prepared by remember { mutableStateOf<PreparedBaseline?>(null) }
     var comparison by remember { mutableStateOf<PreparedComparison?>(null) }
+    var guidancePipeline by remember { mutableStateOf<NativeGuidancePipeline?>(null) }
 
     val liveReadout by produceState<NativeGuidanceReadout>(
         NativeGuidanceReadout.Waiting, view, prepared, available,
@@ -57,6 +59,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
 
     fun reset() {
         view.stopGuidance()
+        guidancePipeline = null
         savedSession?.close()
         savedSession = null
         job?.cancel()
@@ -69,6 +72,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     DisposableEffect(view, dispatcher) {
         onDispose {
             view.stopGuidance()
+        guidancePipeline = null
             savedSession?.close()
             job?.cancel()
             view.cancelBaselineCapture()
@@ -182,6 +186,26 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                     val result = measured.analysis
                     Text("現在の移動ガイド")
                     Text(guidanceReadoutText(liveReadout, saved))
+                    if (saved.comparison.verificationAttempts >= 3 && liveReadout != NativeGuidanceReadout.Verified &&
+                        liveReadout != NativeGuidanceReadout.Verifying) {
+                        Text("最終確認は3回までです。手動で確認してください。成功扱いにはしません。")
+                    }
+                    Button(enabled = available && !busy && guidancePipeline != null &&
+                        saved.comparison.verificationAttempts < 3 &&
+                        liveReadout == NativeGuidanceReadout.ConfirmationRequired, onClick = {
+                        val owner = guidancePipeline
+                        if (owner != null) runOperation {
+                            val packet = captureFrame()
+                            val outcome = withContext(dispatcher) {
+                                val operation = currentCoroutineContext()
+                                runtime.verify(saved, packet, owner) { operation.ensureActive() }
+                            }
+                            currentCoroutineContext().ensureActive()
+                            saved.comparison.validity.requireCurrent()
+                            message = if (outcome.unavailable) "最終確認待ちです。通信・認証を確認してください。成功にはしていません。"
+                                else "最終確認結果を受信しました。現在の追跡状態を表示します。"
+                        }
+                    }) { Text("最終確認（保存画像と現在画像を送信）") }
                     Text("比較結果（比較撮影時点）")
                     Text("端末内外観照合：" + measured.measurements.objects.size + "候補・" +
                         measured.measurements.pairs.size + "組合せ")
@@ -224,16 +248,17 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                         }
                     }
                     if (result.addedObjects.isNotEmpty()) Text("追加物体：" + result.addedObjects.size + "個")
-                    Text("移動ガイドは現在画像ごとに再照合します。保存時に向き不要とした物体だけ位置・安定時間で局所判定します。向きが重要な物体の角度確認と最終確認は未接続です。")
+                    Text("移動ガイドは現在画像ごとに再照合します。保存時に向き不要とした物体だけ位置・安定時間で局所判定します。向きが重要な物体の角度確認は未接続です。局所完了後に最終確認できます。")
                     Button(enabled = available && !busy, onClick = {
                         view.stopGuidance()
+        guidancePipeline = null
                         try {
                             saved.comparison.validity.requireCurrent()
                             val source = view.frameSource
                                 ?: throw BaselineCaptureRejected("カメラを再開してください。")
                             val evidence = runtime.movementEvidence(saved, measured)
                             try {
-                                view.startGuidance(saved.measured.sceneId, source, saved.anchor,
+                                guidancePipeline = view.startGuidance(saved.measured.sceneId, source, saved.anchor,
                                     saved.targets.copyGeometry(), saved.targets.copyIds(),
                                     saved.targets.copyPositions(),
                                     android.os.SystemClock::elapsedRealtime, evidence)
@@ -251,6 +276,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                     }) { Text("移動ガイドを開始・再開") }
                     Button(onClick = {
                         view.stopGuidance()
+        guidancePipeline = null
                         message = "移動ガイドを停止しました。"
                     }) { Text("移動ガイドを停止") }
                 }
@@ -288,7 +314,10 @@ private fun guidanceReadoutText(readout: NativeGuidanceReadout, saved: PreparedB
     return when (readout) {
         NativeGuidanceReadout.Waiting -> "現在のガイド情報を待っています。未開始の場合は開始してください。"
         NativeGuidanceReadout.Unavailable -> "現在の位置を確認できません。距離表示を保留しています。"
-        NativeGuidanceReadout.ConfirmationRequired -> "局所ガイドとは別に最終確認が必要です。復元成功は未表示です。"
+        NativeGuidanceReadout.ConfirmationRequired -> "局所完了しました。最終確認が必要です。"
+        NativeGuidanceReadout.Verifying -> "最終確認中です。物体を動かさずカメラに映してください。"
+        NativeGuidanceReadout.Verified -> "REALITY RESTORED"
+        NativeGuidanceReadout.ManualConfirmation -> "最終確認の上限です。手動で確認してください。成功扱いにはしません。"
         is NativeGuidanceReadout.Move -> label(readout.objectId) +
             String.format(java.util.Locale.ROOT, "：現在の残り距離 %.1f cm", readout.distanceMeters * 100.0)
         is NativeGuidanceReadout.NearTarget -> label(readout.objectId) + "：目標付近です。まだ復元完了ではありません。"
