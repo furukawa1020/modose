@@ -3,6 +3,7 @@ package com.modose.app.vision.tracking
 import com.modose.app.ar.image.CpuCameraImage
 import com.modose.app.core.NativeGuidanceEpoch
 import com.modose.app.core.NativeImageCapture
+import com.modose.app.network.baseline.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -153,6 +154,38 @@ class CompareFrameSemanticsTest {
             assertEquals(1, opens)
             assertEquals(AppearanceExtractionFailure.MODEL_UNAVAILABLE, source.lastFailure)
         } finally { source.close() }
+    }
+
+    @Test
+    fun savedOrientationRequirementReachesCoreEvidenceWithoutInventingAnAngle() {
+        for (important in listOf(false, true)) {
+            val objectSpec = BaselineObject("cup", "cup", listOf("red"),
+                NormalizedBoundingBox(0, 0, 200, 200), important, ObjectSymmetry.Rotational)
+            val policy = ConfirmedOrientationPolicy.create("scene", listOf(objectSpec), mapOf("cup" to 7))
+            val source = CpuMeasuredEvidenceSource("scene", listOf(SavedMeasuredAppearance(7, red)),
+                CompareFrameSemantics(seed(), policy), { AppearanceExtractorOpen.Opened(Engine(red)) })
+            try {
+                val frame = observation()
+                val evidence = requireNotNull(source.withImage(CpuCameraImage(100, 100, 101L, emptyList())) {
+                    source.resolve(frame)
+                })
+                assertEquals(!important, evidence.pairs.single().orientationAligned)
+                assertEquals(0.9, evidence.pairs.single().semanticScore, 1e-12)
+            } finally { source.close() }
+        }
+    }
+
+    @Test
+    fun foreignSceneOrUnknownSavedIdCannotWaiveOrientation() {
+        val objectSpec = BaselineObject("cup", "cup", listOf("red"),
+            NormalizedBoundingBox(0, 0, 200, 200), false, ObjectSymmetry.Rotational)
+        for (policy in listOf(
+            ConfirmedOrientationPolicy.create("other", listOf(objectSpec), mapOf("cup" to 7)),
+            ConfirmedOrientationPolicy.create("scene", listOf(objectSpec), mapOf("cup" to 8)))) {
+            val frame = observation()
+            val result = requireNotNull(CompareFrameSemantics(seed(), policy).readMeasured(frame, mapOf(1 to red)))
+            assertEquals(false, result.pairs.single().orientationAligned)
+        }
     }
 
     private class Engine(val appearance: MeasuredAppearance, val wrongTime: Boolean = false) : AppearanceExtractor {

@@ -5,10 +5,12 @@ import kotlin.math.min
 /**
  * Transfers the Compare claim only through measured appearance compatibility.
  * Rust still owns global assignment and ambiguity margins. Tracker IDs are ignored.
- * Orientation is deliberately unconfirmed, so this source cannot complete restoration.
+ * Orientation remains unconfirmed unless the saved scene explicitly does not require it.
+ * Neither this requirement nor local completion is a final verification verdict.
  */
 internal class CompareFrameSemantics(
     private val comparison: MeasuredComparison,
+    private val orientationPolicy: ConfirmedOrientationPolicy? = null,
 ) : AppearanceSemanticFrameMeasurementSource {
     init {
         require(comparison.sceneId.isNotBlank() && comparison.imageTimestampNanos > 0)
@@ -48,7 +50,8 @@ internal class CompareFrameSemantics(
                 val signature = seed.appearance.signature.similarity(fresh.signature) ?: return null
                 // Derived confidence cannot exceed the original VLM claim or either measured feature.
                 pairs.add(SemanticPairMeasurement(seed.claimedSavedId, item.currentId,
-                    min(confidence, min(embedding, signature)), orientationAligned = false))
+                    min(confidence, min(embedding, signature)), orientationAligned =
+                        orientationPolicy?.satisfiedWithoutMeasurement(comparison.sceneId, seed.claimedSavedId) == true))
             }
         }
         // Only disjoint observed rectangles reach here; no priority is inferred for unseen objects.
