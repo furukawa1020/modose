@@ -46,6 +46,7 @@ internal data class PreparedBaseline(
     val targets: NativeBaselineTargets,
     val comparison: SavedSceneComparison,
     val anchor: SceneAnchorSnapshot,
+    val orientationPolicy: ConfirmedOrientationPolicy? = null,
 )
 
 internal data class PreparedComparison(
@@ -205,7 +206,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
         return PreparedBaseline(measured, targets, SavedSceneComparison(
             measured.sceneId, measured.imageTimestampNanos, review.validity,
             review.reviewing.capture.image, objects,
-        ), review.anchor)
+        ), review.anchor, ConfirmedOrientationPolicy.create(measured.sceneId, objects, measured.objectIds))
     }
 
     fun compare(saved: PreparedBaseline, packet: BaselineCameraFrame, checkActive: () -> Unit): PreparedComparison {
@@ -278,7 +279,7 @@ internal class BaselineCameraRuntime(private val context: Context) {
             compared.measurements.objects.any { it.claimedSavedId !in saved.measured.objectIds.values }
         ) fail("比較と保存状態が一致しません。撮り直してください。")
         val semantics = try {
-            CompareFrameSemantics(compared.measurements)
+            CompareFrameSemantics(compared.measurements, saved.orientationPolicy)
         } catch (_: IllegalArgumentException) {
             fail("比較候補がない、または重なっています。ガイドを開始できません。")
         }

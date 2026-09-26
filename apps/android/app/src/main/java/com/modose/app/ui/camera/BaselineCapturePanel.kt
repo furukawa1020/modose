@@ -224,7 +224,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                         }
                     }
                     if (result.addedObjects.isNotEmpty()) Text("追加物体：" + result.addedObjects.size + "個")
-                    Text("移動ガイドは現在画像ごとに再照合します。向きの確認・最終確認は未接続のため、復元完了にはなりません。")
+                    Text("移動ガイドは現在画像ごとに再照合します。保存時に向き不要とした物体だけ位置・安定時間で局所判定します。向きが重要な物体の角度確認と最終確認は未接続です。")
                     Button(enabled = available && !busy, onClick = {
                         view.stopGuidance()
                         try {
