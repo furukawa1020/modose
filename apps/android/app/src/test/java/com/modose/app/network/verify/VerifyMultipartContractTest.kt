@@ -19,9 +19,9 @@ class VerifyMultipartContractTest {
         val body = request.body.toString(Charsets.UTF_8)
         assertEquals("/v1/vision/verify", request.path)
         for (name in listOf("metadata", "baselineImage", "currentImage", "confirmedObjects")) {
-            assertEquals(1, Regex("name=\\"" + name + "\\"").findAll(body).count())
+            assertEquals(1, body.split("name=" + '"' + name + '"').size - 1)
         }
-        assertFalse(body.contains("name=\\"finalImage\\""))
+        assertFalse(body.contains("name=" + '"' + "finalImage" + '"'))
         assertTrue(body.contains("saved-jpeg"))
         assertTrue(body.contains("final-jpeg"))
         val boundary = requireNotNull(request.contentType).substringAfter("boundary=")
