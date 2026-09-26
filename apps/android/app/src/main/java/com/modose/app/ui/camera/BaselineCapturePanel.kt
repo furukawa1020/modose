@@ -11,6 +11,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.modose.app.ar.render.BaselineCameraFrame
 import com.modose.app.ar.render.CameraBackgroundSurfaceView
+import com.modose.app.core.NativeGuidanceReadout
+import com.modose.app.core.NativeFrameHiddenReason
+import com.modose.app.core.NativeRecoveryReason
 import com.modose.app.flow.baseline.*
 import com.modose.app.flow.compare.CurrentObjectState
 import com.modose.app.ui.review.BaselineObjectReviewScreen
@@ -35,6 +38,22 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     var review by remember { mutableStateOf<BaselineImageReview?>(null) }
     var prepared by remember { mutableStateOf<PreparedBaseline?>(null) }
     var comparison by remember { mutableStateOf<PreparedComparison?>(null) }
+
+    val liveReadout by produceState<NativeGuidanceReadout>(
+        NativeGuidanceReadout.Waiting, view, prepared, available,
+    ) {
+        val saved = prepared
+        val ids = saved?.targets?.copyIds()?.toSet()
+        value = NativeGuidanceReadout.Waiting
+        if (saved != null && ids != null && available) {
+            while (isActive) {
+                withFrameNanos {
+                    value = if (saved.comparison.validity.isCurrent) view.readGuidance(ids)
+                        else NativeGuidanceReadout.Unavailable
+                }
+            }
+        }
+    }
 
     fun reset() {
         view.stopGuidance()
@@ -161,6 +180,8 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                 }) { Text("現在の状態と比較") }
                 comparison?.let { measured ->
                     val result = measured.analysis
+                    Text("現在の移動ガイド")
+                    Text(guidanceReadoutText(liveReadout, saved))
                     Text("比較結果（比較撮影時点）")
                     Text("端末内外観照合：" + measured.measurements.objects.size + "候補・" +
                         measured.measurements.pairs.size + "組合せ")
@@ -254,6 +275,34 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
             }
             message?.let { Text(it) }
             if (busy) Button(onClick = ::reset) { Text("中断") }
+        }
+    }
+}
+
+/** Never formats a retained Compare distance as live guidance. */
+private fun guidanceReadoutText(readout: NativeGuidanceReadout, saved: PreparedBaseline): String {
+    fun label(id: Int): String {
+        val external = saved.measured.objectIds.entries.singleOrNull { it.value == id }?.key
+        return external?.let { saved.comparison.labels[it] } ?: "対象物"
+    }
+    return when (readout) {
+        NativeGuidanceReadout.Waiting -> "現在のガイド情報を待っています。未開始の場合は開始してください。"
+        NativeGuidanceReadout.Unavailable -> "現在の位置を確認できません。距離表示を保留しています。"
+        NativeGuidanceReadout.ConfirmationRequired -> "局所ガイドとは別に最終確認が必要です。復元成功は未表示です。"
+        is NativeGuidanceReadout.Move -> label(readout.objectId) +
+            String.format(java.util.Locale.ROOT, "：現在の残り距離 %.1f cm", readout.distanceMeters * 100.0)
+        is NativeGuidanceReadout.NearTarget -> label(readout.objectId) + "：目標付近です。まだ復元完了ではありません。"
+        is NativeGuidanceReadout.OrientationRequired -> label(readout.objectId) + "：向きの確認が必要です。"
+        is NativeGuidanceReadout.Hidden -> when (readout.reason) {
+            NativeFrameHiddenReason.TRACKING_LOST -> "追跡を再取得しています。距離表示を保留しています。"
+            NativeFrameHiddenReason.STALE_FRAME -> "位置情報の更新待ちです。古い距離は表示しません。"
+            else -> "現在の位置情報を利用できません。距離表示を保留しています。"
+        }
+        is NativeGuidanceReadout.Recover -> label(readout.objectId) + when (readout.reason) {
+            NativeRecoveryReason.UNOBSERVED -> "：現在位置の検出待ちです。"
+            NativeRecoveryReason.TRACKING_LOST -> "：追跡の再取得待ちです。"
+            NativeRecoveryReason.MISSING -> "：見つかりません。対象をカメラへ戻してください。"
+            NativeRecoveryReason.AMBIGUOUS -> "：対応が曖昧です。物体を離して映してください。"
         }
     }
 }
