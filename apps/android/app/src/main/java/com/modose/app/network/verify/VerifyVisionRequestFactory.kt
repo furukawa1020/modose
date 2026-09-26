@@ -67,7 +67,7 @@ object VerifyVisionRequestFactory {
         ).use { output ->
             output.jsonPart(boundary, "metadata", metadata)
             output.imagePart(boundary, "baselineImage", "baseline.jpg", baselineImage.bytes)
-            output.imagePart(boundary, "finalImage", "final.jpg", finalImage.bytes)
+            output.imagePart(boundary, "currentImage", "final.jpg", finalImage.bytes)
             output.jsonPart(boundary, "confirmedObjects", confirmed)
             output.utf8("--" + boundary + "--\r\n")
             output.toByteArray()
