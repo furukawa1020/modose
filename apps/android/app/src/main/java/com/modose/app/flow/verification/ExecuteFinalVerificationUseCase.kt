@@ -3,6 +3,7 @@ package com.modose.app.flow.verification
 import com.modose.app.ar.image.VlmJpegImage
 import com.modose.app.network.VisionApiRequest
 import com.modose.app.network.VisionApiResult
+import com.modose.app.network.verify.VerifyAnalysisDecoder
 import com.modose.app.network.verify.VerifyRequestBuildResult
 import com.modose.app.network.verify.VerifyRequestRejection
 import com.modose.app.network.verify.VerifyVisionRequestFactory
@@ -49,6 +50,7 @@ data class ExecuteVerificationInput(
 )
 
 enum class VerificationMappingFailure {
+    InvalidExpectedObjects,
     UnsupportedSchema,
     InvalidStatus,
     InvalidModel,
@@ -86,9 +88,14 @@ sealed interface ExecuteVerificationResult {
 
 class ExecuteFinalVerificationUseCase(
     private val executeRequest: (VisionApiRequest) -> VisionApiResult,
-    private val decoder: SceneVerificationDecoder,
+    private val decoder: SceneVerificationDecoder = VerifyAnalysisDecoder,
 ) {
     fun execute(input: ExecuteVerificationInput): ExecuteVerificationResult {
+        val expectedIds = input.expectedObjectIds.toSet()
+        if (expectedIds.size !in 1..5 || expectedIds.any { it.isBlank() || it.length > 64 }) {
+            return mapping(VerificationMappingFailure.InvalidExpectedObjects)
+        }
+        val ownedInput = input.copy(expectedObjectIds = expectedIds)
         val request = when (
             val built = VerifyVisionRequestFactory.create(
                 sceneId = input.sceneId,
@@ -106,7 +113,7 @@ class ExecuteFinalVerificationUseCase(
         }
 
         return when (val response = executeRequest(request)) {
-            is VisionApiResult.Success -> decodeAndMap(input, response.body)
+            is VisionApiResult.Success -> decodeAndMap(ownedInput, response.body)
             VisionApiResult.IDTokenUnavailable ->
                 failed(ExecuteVerificationFailure.IdTokenUnavailable)
             VisionApiResult.AppCheckTokenUnavailable ->
