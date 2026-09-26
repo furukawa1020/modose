@@ -6,6 +6,8 @@ import com.modose.app.ar.coordinates.NativeAnchorRebaseFactory
 import com.modose.app.ar.coordinates.NativeImageCaptureFactory
 import com.modose.app.ar.image.CpuCameraImage
 import com.modose.app.ar.image.CpuImageAcquisitionResult
+import com.modose.app.core.NativeGuidanceReadout
+import com.modose.app.core.NativeGuidanceReadoutReader
 import com.modose.app.core.NativeImageCapture
 import com.modose.app.core.NativeGuidancePipeline
 import com.modose.app.core.NativeGuidanceSink
@@ -124,6 +126,21 @@ class CameraBackgroundSurfaceView(
         recognitionSession = binding
         cameraRenderer.recognitionBinding = binding
         return pipeline
+    }
+
+    /** UI must call on each frame; the reader rechecks the native snapshot lease. */
+    internal fun readGuidance(savedIds: Set<Int>): NativeGuidanceReadout {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val session = recognitionSession ?: return NativeGuidanceReadout.Waiting
+        val binding = cameraRenderer.guideBinding ?: return NativeGuidanceReadout.Waiting
+        if (released || !activityResumed || frameSource !== session.source ||
+            binding.source !== session.source || binding.anchor.id != session.anchor.id
+        ) return NativeGuidanceReadout.Unavailable
+        return try {
+            NativeGuidanceReadoutReader.read(binding.snapshot, binding.monotonicMillis(), savedIds)
+        } catch (_: RuntimeException) {
+            NativeGuidanceReadout.Unavailable
+        }
     }
 
     internal fun stopGuidance() {
