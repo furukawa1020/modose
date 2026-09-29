@@ -1,10 +1,13 @@
 package com.modose.app.core
 
-/** UI data only. No variant represents verified restoration. */
+/** UI data derived from the current revocable native frame, never from HTTP alone. */
 internal sealed interface NativeGuidanceReadout {
     data object Waiting : NativeGuidanceReadout
     data object Unavailable : NativeGuidanceReadout
     data object ConfirmationRequired : NativeGuidanceReadout
+    data object Verifying : NativeGuidanceReadout
+    data object Verified : NativeGuidanceReadout
+    data object ManualConfirmation : NativeGuidanceReadout
     data class Hidden(val reason: NativeFrameHiddenReason) : NativeGuidanceReadout
     data class Move(val objectId: Int, val distanceMeters: Double) : NativeGuidanceReadout
     data class NearTarget(val objectId: Int) : NativeGuidanceReadout
@@ -25,7 +28,13 @@ internal object NativeGuidanceReadoutReader {
             NativeWorldFramePresentation.InvalidProjection -> return NativeGuidanceReadout.Unavailable
             is NativeWorldFramePresentation.Ready -> presentation
         }
-        if (frame.state != CoreRestoreState.GUIDING) return NativeGuidanceReadout.ConfirmationRequired
+        when (frame.state) {
+            CoreRestoreState.AWAITING_VERIFICATION -> return NativeGuidanceReadout.ConfirmationRequired
+            CoreRestoreState.VERIFYING -> return NativeGuidanceReadout.Verifying
+            CoreRestoreState.VERIFIED -> return NativeGuidanceReadout.Verified
+            CoreRestoreState.MANUAL_CONFIRMATION -> return NativeGuidanceReadout.ManualConfirmation
+            CoreRestoreState.GUIDING -> Unit
+        }
         val guide = frame.guidance ?: return NativeGuidanceReadout.Waiting
         if (guide.objectId !in savedIds) return NativeGuidanceReadout.Unavailable
         return when (guide) {

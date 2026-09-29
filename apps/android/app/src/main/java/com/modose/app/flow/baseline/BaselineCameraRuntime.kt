@@ -16,6 +16,7 @@ import com.modose.app.ar.render.BaselineCameraFrame
 import com.modose.app.ar.render.BaselineCaptureValidity
 import com.modose.app.core.*
 import com.modose.app.flow.compare.*
+import com.modose.app.flow.verification.*
 import com.modose.app.network.compare.CompareAnalysis
 import com.modose.app.network.*
 import com.modose.app.network.baseline.BaselineObject
@@ -54,6 +55,8 @@ internal data class PreparedComparison(
     val measurements: MeasuredComparison,
     val distances: List<NativeCandidateDistance>,
 )
+
+internal data class CameraVerificationOutcome(val state: CoreRestoreState, val unavailable: Boolean)
 
 private data class BaselineCaptureInput(
     val validity: BaselineCaptureValidity,
@@ -269,6 +272,55 @@ internal class BaselineCameraRuntime(private val context: Context) {
             ?: fail("比較画像と候補の座標情報が一致しません。撮り直してください。")
         checkCurrent()
         return PreparedComparison(analysis, measurements, projected.distances)
+    }
+
+    fun verify(
+        saved: PreparedBaseline, packet: BaselineCameraFrame,
+        pipeline: NativeGuidancePipeline, checkActive: () -> Unit,
+    ): CameraVerificationOutcome {
+        fun checkCurrent() {
+            checkActive()
+            if (!saved.comparison.validity.isCurrent || packet.validity !== saved.comparison.validity ||
+                pipeline.epoch.sceneId != saved.measured.sceneId
+            ) fail("最終確認の保存状態・追跡が失効しました。成功にはしません。")
+        }
+        checkCurrent()
+        if (saved.comparison.verificationAttempts >= 3) fail("最終確認の上限に達しました。手動で確認してください。")
+        val input = prepare(packet, saved.measured.sceneId, ::checkCurrent)
+        val encoded = (VlmJpegEncoder().encode(input.image, input.plan) as? VlmJpegEncodingResult.Encoded)?.image
+            ?: fail("最終確認用の画像を生成できません。")
+        val settings = settings()
+        val app = firebase(settings)
+        val client = AuthenticatedVisionApiClient(settings.getProperty("apiBaseUrl"), "0.1.0",
+            FirebaseIdTokenProvider(FirebaseAuth.getInstance(app)),
+            FirebaseAppCheckTokenProvider(FirebaseAppCheck.getInstance(app)),
+            transport = UrlConnectionVisionHttpTransport(), maximumResponseBytes = 64_000)
+        checkCurrent()
+        val ticket = try {
+            pipeline.beginVerification(pipeline.epoch)
+        } catch (_: RuntimeException) {
+            fail("局所完了の状態を確認できません。ガイドを再開してください。")
+        }
+        var completed = false
+        try {
+            val request = saved.comparison.reserveVerification(input.validity, input.image.timestampNanos, encoded)
+                ?: fail("最終確認画像が無効、または試行上限です。成功にはしません。")
+            val result = ExecuteFinalVerificationUseCase(executeRequest = {
+                checkCurrent()
+                client.execute(it)
+            }).execute(request)
+            checkCurrent()
+            val verdict = NativeVerificationDecisionMapper(saved.measured.objectIds).map(result)
+            val state = pipeline.completeVerification(pipeline.epoch, ticket, verdict)
+            completed = true
+            checkCurrent()
+            return CameraVerificationOutcome(state, verdict === NativeVerificationResult.Unavailable)
+        } finally {
+            if (!completed) {
+                // Cancellation, exceptions and revoked captures never leave a pending success.
+                runCatching { pipeline.completeVerification(pipeline.epoch, ticket, NativeVerificationResult.Unavailable) }
+            }
+        }
     }
 
     /** Creates a lazy source; model creation/inference/close stay on the detector worker. */

@@ -52,8 +52,12 @@ class NativeGuidanceReadoutReaderTest {
         assertEquals(NativeGuidanceReadout.NearTarget(7), read(snapshot(NativeGuidance.Ring(7, target)).second))
         assertEquals(NativeGuidanceReadout.OrientationRequired(7),
             read(snapshot(NativeGuidance.CheckOrientation(7, target)).second))
-        for (state in CoreRestoreState.entries.filter { it != CoreRestoreState.GUIDING }) {
-            assertEquals(NativeGuidanceReadout.ConfirmationRequired, read(snapshot(state = state).second))
+        for ((state, expected) in mapOf(
+            CoreRestoreState.AWAITING_VERIFICATION to NativeGuidanceReadout.ConfirmationRequired,
+            CoreRestoreState.VERIFYING to NativeGuidanceReadout.Verifying,
+            CoreRestoreState.VERIFIED to NativeGuidanceReadout.Verified,
+            CoreRestoreState.MANUAL_CONFIRMATION to NativeGuidanceReadout.ManualConfirmation)) {
+            assertEquals(expected, read(snapshot(state = state).second))
         }
     }
 
@@ -70,6 +74,15 @@ class NativeGuidanceReadoutReaderTest {
         val frame = NativeWorldFrameSnapshot(NativeFrameSnapshot(100L,
             NativeFramePresentation.Hidden(NativeFrameHiddenReason.TRACKING_LOST)), basis)
         assertEquals(NativeGuidanceReadout.Hidden(NativeFrameHiddenReason.TRACKING_LOST), read(frame))
+    }
+
+    @Test
+    fun verifiedDisplayExpiresAndIsRevokedLikeMovement() {
+        val (source, frame) = snapshot(guide = null, state = CoreRestoreState.VERIFIED)
+        assertEquals(NativeGuidanceReadout.Verified, read(frame))
+        assertEquals(NativeGuidanceReadout.Hidden(NativeFrameHiddenReason.STALE_FRAME), read(frame, 301L))
+        source.invalidate()
+        assertEquals(NativeGuidanceReadout.Hidden(NativeFrameHiddenReason.SUPERSEDED), read(frame))
     }
 
     @Test
