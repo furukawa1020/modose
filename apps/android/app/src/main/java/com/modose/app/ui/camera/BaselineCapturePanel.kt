@@ -202,8 +202,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                             }
                             currentCoroutineContext().ensureActive()
                             saved.comparison.validity.requireCurrent()
-                            message = if (outcome.unavailable) "最終確認待ちです。通信・認証を確認してください。成功にはしていません。"
-                                else "最終確認結果を受信しました。現在の追跡状態を表示します。"
+                            message = outcome.message
                         }
                     }) { Text("最終確認（保存画像と現在画像を送信）") }
                     Text("比較結果（比較撮影時点）")
