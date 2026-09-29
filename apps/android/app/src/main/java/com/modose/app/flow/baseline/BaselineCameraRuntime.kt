@@ -56,7 +56,9 @@ internal data class PreparedComparison(
     val distances: List<NativeCandidateDistance>,
 )
 
-internal data class CameraVerificationOutcome(val state: CoreRestoreState, val unavailable: Boolean)
+internal data class CameraVerificationOutcome(
+    val state: CoreRestoreState, val unavailable: Boolean, val message: String,
+)
 
 private data class BaselineCaptureInput(
     val validity: BaselineCaptureValidity,
@@ -314,7 +316,8 @@ internal class BaselineCameraRuntime(private val context: Context) {
             val state = pipeline.completeVerification(pipeline.epoch, ticket, verdict)
             completed = true
             checkCurrent()
-            return CameraVerificationOutcome(state, verdict === NativeVerificationResult.Unavailable)
+            return CameraVerificationOutcome(state, verdict === NativeVerificationResult.Unavailable,
+                VerificationFeedback.message(result, state, saved.comparison.labels))
         } finally {
             if (!completed) {
                 // Cancellation, exceptions and revoked captures never leave a pending success.
