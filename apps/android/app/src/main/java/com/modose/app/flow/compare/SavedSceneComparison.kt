@@ -2,6 +2,7 @@ package com.modose.app.flow.compare
 
 import com.modose.app.ar.image.VlmJpegImage
 import com.modose.app.ar.render.BaselineCaptureValidity
+import com.modose.app.flow.verification.ExecuteVerificationInput
 import com.modose.app.network.*
 import com.modose.app.network.baseline.BaselineObject
 import com.modose.app.network.compare.*
@@ -32,6 +33,35 @@ internal class SavedSceneComparison(
     private val expectedIds = labels.keys.toList()
     private val attempted = AtomicBoolean(false)
     val hasAttempted: Boolean get() = attempted.get()
+
+    @Volatile
+    var verificationAttempts: Int = 0
+        private set
+    private var lastVerificationImage = savedTimestampNanos
+
+    /** Reserve only after Rust issues a ticket. No automatic transport retry. */
+    @Synchronized
+    fun reserveVerification(
+        currentValidity: BaselineCaptureValidity,
+        timestampNanos: Long,
+        finalImage: VlmJpegImage,
+    ): ExecuteVerificationInput? {
+        if (!hasAttempted || !validity.isCurrent || currentValidity !== validity ||
+            verificationAttempts >= 3 || timestampNanos <= lastVerificationImage ||
+            finalImage.mimeType != VlmJpegImage.MIME_TYPE || finalImage.bytes.size !in 1..2_000_000
+        ) return null
+        val now = Instant.now()
+        val random = UUID.randomUUID()
+        val key = UUID((now.toEpochMilli() shl 16) or 0x7000L or
+            (random.mostSignificantBits and 0xfffL),
+            (random.leastSignificantBits and 0x3fffffffffffffffL) or Long.MIN_VALUE).toString()
+        val input = ExecuteVerificationInput(sceneId, now, key,
+            baseline.copy(bytes = baseline.bytes.copyOf()),
+            finalImage.copy(bytes = finalImage.bytes.copyOf()), confirmedJson, expectedIds.toSet())
+        verificationAttempts++
+        lastVerificationImage = timestampNanos
+        return input
+    }
 
     init {
         require(savedTimestampNanos > 0 && image.mimeType == VlmJpegImage.MIME_TYPE)
