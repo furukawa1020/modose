@@ -72,7 +72,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
     DisposableEffect(view, dispatcher) {
         onDispose {
             view.stopGuidance()
-        guidancePipeline = null
+            guidancePipeline = null
             savedSession?.close()
             job?.cancel()
             view.cancelBaselineCapture()
@@ -251,7 +251,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                     Text("移動ガイドは現在画像ごとに再照合します。保存時に向き不要とした物体だけ位置・安定時間で局所判定します。向きが重要な物体の角度確認は未接続です。局所完了後に最終確認できます。")
                     Button(enabled = available && !busy, onClick = {
                         view.stopGuidance()
-        guidancePipeline = null
+                        guidancePipeline = null
                         try {
                             saved.comparison.validity.requireCurrent()
                             val source = view.frameSource
@@ -276,7 +276,7 @@ internal fun BaselineCapturePanel(view: CameraBackgroundSurfaceView, available: 
                     }) { Text("移動ガイドを開始・再開") }
                     Button(onClick = {
                         view.stopGuidance()
-        guidancePipeline = null
+                        guidancePipeline = null
                         message = "移動ガイドを停止しました。"
                     }) { Text("移動ガイドを停止") }
                 }
