@@ -1,6 +1,7 @@
 package com.modose.app.network.verify
 
 import com.modose.app.ar.image.VlmJpegImage
+import com.modose.app.network.compare.ConfirmedObjectsFixture
 import com.modose.app.flow.verification.*
 import com.modose.app.network.VisionApiResult
 import org.junit.Assert.*
@@ -14,7 +15,7 @@ class VerifyHttpExecutionTest {
         "018f0f90-1234-4abc-8def-123456789abc", Instant.parse("2026-09-26T00:00:00Z"),
         "018f0f90-1234-7abc-8def-123456789abc",
         VlmJpegImage(byteArrayOf(1), 10, 10), VlmJpegImage(byteArrayOf(2), 10, 10),
-        """{"objects":[],"excludedCandidates":[]}""", ids)
+        ConfirmedObjectsFixture.json(), ids)
     private fun execute(body: String) = ExecuteFinalVerificationUseCase(
         executeRequest = { VisionApiResult.Success(200, body.toByteArray()) }).execute(input())
 
@@ -99,6 +100,54 @@ class VerifyHttpExecutionTest {
                 """[{"baselineObjectId":"other","reason":"position"}]""").toByteArray())
         })
         assertTrue(useCase.execute(input(ids)) is ExecuteVerificationResult.Failed)
+    }
+
+    @Test
+    fun mismatchedMissingAndExtraExpectedIdsNeverInvokeTransport() {
+        var calls = 0
+        val useCase = ExecuteFinalVerificationUseCase(executeRequest = {
+            calls++
+            VisionApiResult.Success(200, json().toByteArray())
+        })
+        for (ids in listOf(setOf("other"), setOf("cup", "other"))) {
+            assertEquals(
+                ExecuteVerificationResult.Failed(ExecuteVerificationFailure.MappingRejected(
+                    VerificationMappingFailure.InvalidExpectedObjects,
+                )),
+                useCase.execute(input(ids)),
+            )
+        }
+        assertEquals(0, calls)
+    }
+
+    @Test
+    fun invalidConfirmedObjectsNeverInvokeTransport() {
+        var calls = 0
+        val useCase = ExecuteFinalVerificationUseCase(executeRequest = {
+            calls++
+            VisionApiResult.Success(200, json().toByteArray())
+        })
+        for (payload in listOf("{broken}", "{}", """{"objects":[],"excludedCandidates":[]}""")) {
+            assertEquals(
+                ExecuteVerificationResult.Failed(ExecuteVerificationFailure.InvalidRequest(
+                    VerifyRequestRejection.InvalidConfirmedObjects,
+                )),
+                useCase.execute(input().copy(confirmedObjectsJson = payload)),
+            )
+        }
+        assertEquals(0, calls)
+    }
+
+    @Test
+    fun reorderedMatchingIdsAreAccepted() {
+        val useCase = ExecuteFinalVerificationUseCase(executeRequest = {
+            VisionApiResult.Success(200, json().toByteArray())
+        })
+        val result = useCase.execute(input(linkedSetOf("pen", "cup")).copy(
+            confirmedObjectsJson = ConfirmedObjectsFixture.json("cup", "pen"),
+        ))
+        assertEquals(SceneVerificationStatus.Verified,
+            (result as ExecuteVerificationResult.Completed).decision.status)
     }
 
     @Test

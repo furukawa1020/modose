@@ -1,6 +1,7 @@
 package com.modose.app.network.verify
 
 import com.modose.app.ar.image.VlmJpegImage
+import com.modose.app.network.compare.ConfirmedObjectsFixture
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
@@ -11,7 +12,7 @@ class VerifyMultipartContractTest {
         VerifyVisionRequestFactory.create("018f0f90-1234-4abc-8def-123456789abc",
             Instant.parse("2026-09-26T00:00:00Z"), key,
             VlmJpegImage("saved-jpeg".toByteArray(), 10, 10), final,
-            """{"objects":[],"excludedCandidates":[]}""")
+            ConfirmedObjectsFixture.json())
 
     @Test
     fun sendsCurrentImageMatchingGoVerifyHandlerNotFinalImage() {

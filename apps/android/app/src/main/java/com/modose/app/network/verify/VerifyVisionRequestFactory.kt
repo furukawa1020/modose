@@ -3,6 +3,7 @@ package com.modose.app.network.verify
 import com.modose.app.ar.image.VlmJpegImage
 import com.modose.app.network.VisionApiRequest
 import com.modose.app.network.VisionHttpMethod
+import com.modose.app.network.compare.ConfirmedObjectsValidator
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -26,7 +27,6 @@ sealed interface VerifyRequestBuildResult {
 object VerifyVisionRequestFactory {
     private const val MAX_IMAGE_BYTES = 2_000_000
     private const val MAX_REQUEST_BYTES = 4_500_000
-    private const val MAX_CONFIRMED_BYTES = 64_000
 
     fun create(
         sceneId: String,
@@ -52,12 +52,8 @@ object VerifyVisionRequestFactory {
             finalImage.bytes.size > MAX_IMAGE_BYTES
         ) return rejected(VerifyRequestRejection.ImageTooLarge)
 
-        val confirmed = confirmedObjectsJson.trim()
-        if (
-            !confirmed.startsWith("{") ||
-            !confirmed.endsWith("}") ||
-            confirmed.toByteArray(StandardCharsets.UTF_8).size > MAX_CONFIRMED_BYTES
-        ) return rejected(VerifyRequestRejection.InvalidConfirmedObjects)
+        val confirmed = ConfirmedObjectsValidator.validate(confirmedObjectsJson)?.json
+            ?: return rejected(VerifyRequestRejection.InvalidConfirmedObjects)
 
         val boundary = "modose-" + idempotencyKey.replace("-", "")
         val metadata = "{\"sceneId\":\"" + sceneId +
