@@ -6,6 +6,7 @@ import com.modose.app.network.VisionApiResult
 import com.modose.app.network.compare.CompareRequestBuildResult
 import com.modose.app.network.compare.CompareRequestRejection
 import com.modose.app.network.compare.CompareVisionRequestFactory
+import com.modose.app.network.compare.ConfirmedObjectsValidator
 import java.time.Instant
 import java.util.Collections
 
@@ -96,6 +97,17 @@ class ExecuteSceneComparisonUseCase(
             is CompareRequestBuildResult.Built -> built.request
             is CompareRequestBuildResult.Rejected ->
                 return fail(SceneCompareFailure.InvalidCapture(built.reason))
+        }
+
+        val expectedIds = ownedCapture.mappingContext.expectedObjectIds
+        val submittedIds = ConfirmedObjectsValidator.validate(capture.confirmedObjectsJson)?.objectIds
+        if (
+            expectedIds.size !in 1..5 ||
+            expectedIds.any { it.isBlank() || it.length > 64 } ||
+            expectedIds.toSet().size != expectedIds.size ||
+            submittedIds != expectedIds.toSet()
+        ) {
+            return fail(SceneCompareFailure.MappingRejected(CompareMappingFailure.InvalidContext))
         }
 
         return when (val response = executeRequest(request)) {
