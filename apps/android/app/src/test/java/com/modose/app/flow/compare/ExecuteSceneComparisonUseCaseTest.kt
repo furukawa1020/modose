@@ -2,6 +2,7 @@ package com.modose.app.flow.compare
 
 import com.modose.app.ar.image.VlmJpegImage
 import com.modose.app.network.VisionApiResult
+import com.modose.app.network.compare.ConfirmedObjectsFixture
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -103,7 +104,7 @@ class ExecuteSceneComparisonUseCaseTest {
         idempotencyKey = IDEMPOTENCY_KEY,
         baselineImage = image(1),
         currentImage = image(2),
-        confirmedObjectsJson = "{\"objects\":[{\"sceneObjectId\":\"object-1\"}]}",
+        confirmedObjectsJson = ConfirmedObjectsFixture.json("object-1"),
     )
 
     private fun image(value: Int) = VlmJpegImage(
