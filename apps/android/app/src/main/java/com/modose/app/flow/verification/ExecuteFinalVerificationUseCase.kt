@@ -3,6 +3,7 @@ package com.modose.app.flow.verification
 import com.modose.app.ar.image.VlmJpegImage
 import com.modose.app.network.VisionApiRequest
 import com.modose.app.network.VisionApiResult
+import com.modose.app.network.compare.ConfirmedObjectsValidator
 import com.modose.app.network.verify.VerifyAnalysisDecoder
 import com.modose.app.network.verify.VerifyRequestBuildResult
 import com.modose.app.network.verify.VerifyRequestRejection
@@ -110,6 +111,11 @@ class ExecuteFinalVerificationUseCase(
             is VerifyRequestBuildResult.Rejected -> return failed(
                 ExecuteVerificationFailure.InvalidRequest(built.reason),
             )
+        }
+
+        val submittedIds = ConfirmedObjectsValidator.validate(input.confirmedObjectsJson)?.objectIds
+        if (submittedIds != expectedIds) {
+            return mapping(VerificationMappingFailure.InvalidExpectedObjects)
         }
 
         return when (val response = executeRequest(request)) {
