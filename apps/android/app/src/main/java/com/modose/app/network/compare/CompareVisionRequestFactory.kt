@@ -28,7 +28,6 @@ object CompareVisionRequestFactory {
     private const val PATH = "/v1/vision/compare"
     private const val MAX_IMAGE_BYTES = 2_000_000
     private const val MAX_REQUEST_BYTES = 4_500_000
-    private const val MAX_CONFIRMED_OBJECTS_BYTES = 64_000
 
     fun create(
         sceneId: String,
@@ -63,15 +62,10 @@ object CompareVisionRequestFactory {
             return rejected(CompareRequestRejection.ImageTooLarge)
         }
 
-        val confirmedObjects = confirmedObjectsJson.trim()
+        val validated = ConfirmedObjectsValidator.validate(confirmedObjectsJson)
+            ?: return rejected(CompareRequestRejection.InvalidConfirmedObjects)
+        val confirmedObjects = validated.json
         val confirmedBytes = confirmedObjects.toByteArray(StandardCharsets.UTF_8)
-        if (
-            !confirmedObjects.startsWith("{") ||
-            !confirmedObjects.endsWith("}") ||
-            confirmedBytes.size > MAX_CONFIRMED_OBJECTS_BYTES
-        ) {
-            return rejected(CompareRequestRejection.InvalidConfirmedObjects)
-        }
 
         val boundary = "modose-" + idempotencyKey.replace("-", "")
         val metadata = "{\"sceneId\":\"" + sceneId + "\",\"capturedAt\":\"" + capturedAt + "\"}"

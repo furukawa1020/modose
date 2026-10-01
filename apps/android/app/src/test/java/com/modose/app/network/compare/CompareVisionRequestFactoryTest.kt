@@ -7,6 +7,9 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 
 class CompareVisionRequestFactoryTest {
     @Test
@@ -87,6 +90,22 @@ class CompareVisionRequestFactoryTest {
         )
     }
 
+    @Test
+    fun rejectsMalformedEmptyDuplicateAndInvalidGeometryPayloads() {
+        val valid = ConfirmedObjectsFixture.json()
+        val objectJson = Json.parseToJsonElement(valid).jsonObject.getValue("objects").jsonArray.single().toString()
+        for (json in listOf(
+            "{broken}",
+            """{"objects":[],"excludedCandidates":[]}""",
+            """{"objects":[$objectJson,$objectJson],"excludedCandidates":[]}""",
+            valid.replace("\"yMin\":100", "\"yMin\":501"),
+            valid.replace("\"xMax\":600", "\"xMax\":1001"),
+            valid.dropLast(1) + ""","unexpected":true}""",
+        )) {
+            assertRejected(CompareRequestRejection.InvalidConfirmedObjects, confirmedObjectsJson = json)
+        }
+    }
+
     private fun create(
         sceneId: String = SCENE_ID,
         idempotencyKey: String = IDEMPOTENCY_KEY,
@@ -134,6 +153,6 @@ class CompareVisionRequestFactoryTest {
     private companion object {
         const val SCENE_ID = "018f0f90-1234-7abc-8def-123456789abd"
         const val IDEMPOTENCY_KEY = "018f0f90-1234-7abc-8def-123456789abc"
-        const val CONFIRMED_OBJECTS = "{\"objects\":[{\"sceneObjectId\":\"object-1\"}]}"
+        val CONFIRMED_OBJECTS = ConfirmedObjectsFixture.json("object-1")
     }
 }
