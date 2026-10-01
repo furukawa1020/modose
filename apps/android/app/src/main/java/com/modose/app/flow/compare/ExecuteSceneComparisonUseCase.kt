@@ -7,6 +7,7 @@ import com.modose.app.network.compare.CompareRequestBuildResult
 import com.modose.app.network.compare.CompareRequestRejection
 import com.modose.app.network.compare.CompareVisionRequestFactory
 import java.time.Instant
+import java.util.Collections
 
 data class SceneCompareCapture(
     val mappingContext: CompareMappingContext,
@@ -71,7 +72,14 @@ class ExecuteSceneComparisonUseCase(
         private set
 
     fun execute(capture: SceneCompareCapture): SceneCompareResult {
-        if (!begin(capture)) {
+        val ownedCapture = capture.copy(
+            mappingContext = capture.mappingContext.copy(
+                expectedObjectIds = Collections.unmodifiableList(
+                    ArrayList(capture.mappingContext.expectedObjectIds),
+                ),
+            ),
+        )
+        if (!begin(ownedCapture)) {
             return SceneCompareResult.DuplicateIgnored
         }
 
@@ -91,7 +99,7 @@ class ExecuteSceneComparisonUseCase(
         }
 
         return when (val response = executeRequest(request)) {
-            is VisionApiResult.Success -> decodeAndMap(capture, response.body)
+            is VisionApiResult.Success -> decodeAndMap(ownedCapture, response.body)
             VisionApiResult.IDTokenUnavailable -> fail(SceneCompareFailure.IdTokenUnavailable)
             VisionApiResult.AppCheckTokenUnavailable ->
                 fail(SceneCompareFailure.AppCheckTokenUnavailable)
